@@ -7,6 +7,7 @@ import json
 import os
 from datetime import datetime
 from http.server import BaseHTTPRequestHandler
+from io import BytesIO
 import boto3
 import pdfplumber
 
@@ -41,7 +42,10 @@ class handler(BaseHTTPRequestHandler):
             extracted_text = ""
             page_count = 0
             
-            with pdfplumber.open(pdf_content) as pdf:
+            # Create BytesIO object for pdfplumber
+            pdf_stream = BytesIO(pdf_content)
+            
+            with pdfplumber.open(pdf_stream) as pdf:
                 total_pages = len(pdf.pages)
                 start_page = 12 if total_pages > 12 else 0
                 
