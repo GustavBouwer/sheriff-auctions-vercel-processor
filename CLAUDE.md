@@ -89,8 +89,9 @@ SUPABASE_URL=https://esfyvihtnzwlnlrllewb.supabase.co
 SUPABASE_KEY=your-service-role-key
 
 # Cloudflare R2 Configuration (S3-compatible)
-R2_ACCESS_KEY_ID=your-r2-access-key
-R2_SECRET_ACCESS_KEY=your-r2-secret
+# IMPORTANT: Use R2-specific API tokens, not general Cloudflare tokens
+R2_ACCESS_KEY_ID=your-r2-access-key  # 32 characters
+R2_SECRET_ACCESS_KEY=your-r2-secret   # Generated with access key
 R2_BUCKET_NAME=sheriff-auction-pdfs
 R2_ENDPOINT_URL=https://account-id.r2.cloudflarestorage.com
 
@@ -102,6 +103,18 @@ DEFAULT_SHERIFF_UUID=f7c42d1a-2cb8-4d87-a84e-c5a0ec51d130
 ```
 
 ## 🔄 **Processing Pipeline**
+
+### **API Endpoints Available**
+
+| Endpoint | Status | Description |
+|----------|--------|-------------|
+| `/api/hello` | ✅ Live | Basic health check |
+| `/api/test` | ✅ Live | Service status with version |
+| `/api/status` | ✅ Live | Full status with R2 bucket info |
+| `/api/debug-r2` | ✅ Live | Debug R2 connection and list objects |
+| `/api/process-single` | ✅ Live | Extract text from single PDF |
+| `/api/process-auctions` | ✅ Live | Split and process auctions with OpenAI |
+| `/api/process` | 🔄 Next | Full ETL pipeline with Supabase upload |
 
 ### **1. PDF Acquisition (from R2)**
 ```python
@@ -234,6 +247,24 @@ curl -X POST "https://your-app.vercel.app/api/process?max_pdfs=1"
 - Schema validation before database upload
 - Case number uniqueness enforced
 
+## 📊 **Current Test Results** (August 6, 2025)
+
+### **Successfully Tested Components** ✅
+1. **PDF Download from R2**: test-989.pdf (2.38MB, 180 pages)
+2. **Text Extraction**: Starting from page 13, stopping at PAUC
+3. **Auction Splitting**: 173 auctions found using regex pattern
+4. **OpenAI Integration**: Successfully extracted structured data
+5. **Data Fields Extracted**:
+   - Case numbers, court details, plaintiff/defendant
+   - Property descriptions, addresses, reserve prices
+   - Auction dates, times, sheriff offices
+   - Property improvements and zoning
+
+### **Known Issues Resolved** ✅
+- **OpenAI/httpx compatibility**: Fixed with openai==1.55.3 + httpx==0.27.2
+- **R2 credentials**: Requires R2-specific API tokens (32 chars)
+- **PDF memory handling**: Using BytesIO for pdfplumber
+
 ## 💡 **Development Notes**
 
 ### **Why Python on Vercel?**
@@ -254,27 +285,28 @@ curl -X POST "https://your-app.vercel.app/api/process?max_pdfs=1"
 
 ## 🚀 **Deployment**
 
+### **Current Deployment Status** ✅
+- **URL**: https://sheriff-auctions-data-etl-zzd2.vercel.app
+- **Repository**: https://github.com/GustavBouwer/sheriff-auctions-vercel-processor
+- **Auto-deploy**: Enabled on push to main branch
+
 ### **Vercel Deployment Steps**
 ```bash
-# 1. Install Vercel CLI
-npm install -g vercel
+# Using GitHub integration (recommended)
+1. Push to GitHub main branch
+2. Vercel auto-deploys within ~45 seconds
+3. Monitor deployment at vercel.com dashboard
 
-# 2. Deploy project
-vercel --prod
-
-# 3. Set environment variables
-vercel env add OPENAI_API_KEY
-vercel env add SUPABASE_URL
-# ... add all required variables
-
-# 4. Redeploy with environment
+# Manual deployment (if needed)
 vercel --prod
 ```
 
 ### **Production Checklist**
-- [ ] Set `ENABLE_PROCESSING=false` initially
-- [ ] Configure all environment variables
-- [ ] Test with single PDF first
+- [x] Set `ENABLE_PROCESSING=false` initially ✅
+- [x] Configure all environment variables ✅
+- [x] Test with single PDF first ✅ (test-989.pdf)
+- [x] Verify OpenAI integration ✅ (3 auctions extracted)
+- [ ] Implement Supabase upload
 - [ ] Monitor OpenAI usage dashboard
 - [ ] Set up cost alerts
 - [ ] Verify Supabase uploads
