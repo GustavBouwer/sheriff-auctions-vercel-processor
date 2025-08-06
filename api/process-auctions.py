@@ -11,7 +11,7 @@ from http.server import BaseHTTPRequestHandler
 from io import BytesIO
 import boto3
 import pdfplumber
-import openai
+from openai import OpenAI
 
 class handler(BaseHTTPRequestHandler):
     def do_GET(self):
@@ -25,7 +25,7 @@ class handler(BaseHTTPRequestHandler):
                 region_name='auto'
             )
             
-            openai.api_key = os.getenv('OPENAI_API_KEY')
+            openai_client = OpenAI(api_key=os.getenv('OPENAI_API_KEY'))
             bucket_name = os.getenv('R2_BUCKET_NAME', 'sheriff-auction-pdfs')
             pdf_key = "unprocessed/test-989.pdf"
             
@@ -86,7 +86,7 @@ Return ONLY the JSON, no other text."""
 
                 try:
                     # Call OpenAI API
-                    response = openai.chat.completions.create(
+                    response = openai_client.chat.completions.create(
                         model="gpt-3.5-turbo",
                         messages=[
                             {"role": "system", "content": "You are a data extraction assistant. Return only valid JSON."},
