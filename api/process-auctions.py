@@ -16,11 +16,6 @@ from openai import OpenAI
 class handler(BaseHTTPRequestHandler):
     def do_GET(self):
         try:
-            # Remove proxy environment variables that conflict with OpenAI
-            for proxy_var in ['HTTP_PROXY', 'HTTPS_PROXY', 'http_proxy', 'https_proxy']:
-                if proxy_var in os.environ:
-                    del os.environ[proxy_var]
-            
             # Initialize clients
             r2_client = boto3.client(
                 's3',
