@@ -1,11 +1,7 @@
 {
   "functions": {
-    "api/process.py": {
-      "runtime": "python3.9",
-      "maxDuration": 300
+    "api/*.py": {
+      "runtime": "python3.9"
     }
-  },
-  "env": {
-    "PYTHON_VERSION": "3.9"
   }
 }

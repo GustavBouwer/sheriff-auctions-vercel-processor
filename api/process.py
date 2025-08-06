@@ -606,10 +606,16 @@ def test_endpoint():
 
 
 # ─── VERCEL SERVERLESS HANDLER ─────────────────────────────────────────────
+from vercel_wsgi import handle_request
+
 def handler(request):
     """Vercel serverless function handler."""
-    return app(request.environ, lambda *args: None)
+    return handle_request(app, request)
 
+# Alternative handler for different Vercel versions
+def application(environ, start_response):
+    """WSGI application handler."""
+    return app(environ, start_response)
 
 if __name__ == '__main__':
     app.run(debug=True)

@@ -3,7 +3,6 @@
 
 # Core PDF processing
 pdfplumber==0.11.5
-PyMuPDF==1.24.14
 
 # OpenAI integration
 openai==1.59.4
@@ -19,6 +18,7 @@ fuzzywuzzy==0.18.0
 # HTTP and web framework
 flask==3.1.0
 requests==2.32.3
+vercel_wsgi==0.1.0
 
 # Text processing
 python-Levenshtein==0.27.1
