@@ -94,12 +94,12 @@ class handler(BaseHTTPRequestHandler):
             
             for pdf_file in pdf_files:
                 pdf_key = f"unprocessed/{pdf_file}"
-                result = await process_single_pdf(pdf_key)
+                result = process_single_pdf(pdf_key)
                 results.append(result)
                 
                 # Move processed PDF to processed folder if successful
                 if result.get('status') == 'success':
-                    await move_pdf_to_processed(pdf_file)
+                    move_pdf_to_processed(pdf_file)
             
             # Send response
             response = {
@@ -126,7 +126,7 @@ class handler(BaseHTTPRequestHandler):
             self.end_headers()
             self.wfile.write(json.dumps(error_response).encode())
 
-async def process_single_pdf(pdf_key):
+def process_single_pdf(pdf_key):
     """Process a single PDF file (same logic as process-complete but for one PDF)"""
     try:
         # Initialize clients
@@ -227,7 +227,7 @@ async def process_single_pdf(pdf_key):
             'error': str(e)
         }
 
-async def move_pdf_to_processed(pdf_filename):
+def move_pdf_to_processed(pdf_filename):
     """Move PDF from unprocessed/ to processed/ folder in R2"""
     try:
         r2_client = boto3.client(
