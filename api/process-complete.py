@@ -73,9 +73,9 @@ def extract_area_components(address, api_key):
 class handler(BaseHTTPRequestHandler):
     def do_GET(self):
         try:
-            # Safety checks
+            # Safety checks - FORCE 3 AUCTIONS FOR TESTING
             enable_processing = os.getenv('ENABLE_PROCESSING', 'false').lower() == 'true'
-            max_auctions = int(os.getenv('MAX_AUCTIONS_PER_RUN', '3'))
+            max_auctions = 3  # HARDCODED TO 3 FOR TESTING
             max_tokens = int(os.getenv('MAX_OPENAI_TOKENS_PER_RUN', '100000'))
             
             # Initialize clients
@@ -224,6 +224,10 @@ Auction text:
                     
                     # Parse response - should be JSON array
                     content = response.choices[0].message.content.strip()
+                    
+                    # Debug: Log the raw response for troubleshooting
+                    print(f"Raw OpenAI response for auction {i+1}: {content[:200]}...")
+                    
                     if content.startswith('['):
                         extracted_data = json.loads(content)
                         if isinstance(extracted_data, list) and len(extracted_data) > 0:
@@ -288,12 +292,21 @@ Auction text:
                         break
                     
                 except Exception as e:
-                    processed_auctions.append({
+                    error_data = {
                         "auction_number": i + 1,
                         "case_number": f"ERROR_{i+1}",
                         "error": f"Processing failed: {str(e)}",
                         "raw_text": auction[:500] + "..." if len(auction) > 500 else auction
-                    })
+                    }
+                    
+                    # Try to include the OpenAI response if available
+                    try:
+                        if 'response' in locals() and response:
+                            error_data["openai_response"] = response.choices[0].message.content[:500]
+                    except:
+                        pass
+                    
+                    processed_auctions.append(error_data)
             
             # Upload to Supabase if enabled
             upload_results = []
