@@ -18,6 +18,7 @@ import requests
 # Add utils directory to path for imports
 sys.path.append(os.path.join(os.path.dirname(__file__), '..', 'utils'))
 from sheriff_mapping import get_sheriff_uuid, is_sheriff_associated
+from supabase_storage import upload_pdf_to_supabase_storage
 
 
 def extract_area_components(address, api_key):
@@ -97,9 +98,9 @@ class handler(BaseHTTPRequestHandler):
                 result = process_single_pdf(pdf_key)
                 results.append(result)
                 
-                # Move processed PDF to processed folder if successful
+                # Upload to Supabase storage and cleanup R2 if successful
                 if result.get('status') == 'success':
-                    move_pdf_to_processed(pdf_file)
+                    upload_and_cleanup_pdf(pdf_file, result)
             
             # Send response
             response = {
@@ -227,8 +228,8 @@ def process_single_pdf(pdf_key):
             'error': str(e)
         }
 
-def move_pdf_to_processed(pdf_filename):
-    """Move PDF from unprocessed/ to processed/ folder in R2"""
+def upload_and_cleanup_pdf(pdf_filename, processing_result):
+    """Upload PDF to Supabase storage and delete from R2 unprocessed folder"""
     try:
         r2_client = boto3.client(
             's3',
@@ -240,19 +241,47 @@ def move_pdf_to_processed(pdf_filename):
         
         bucket_name = os.getenv('R2_BUCKET_NAME', 'sheriff-auction-pdfs')
         source_key = f"unprocessed/{pdf_filename}"
-        dest_key = f"processed/{pdf_filename}"
         
-        # Copy to processed folder
-        r2_client.copy_object(
-            Bucket=bucket_name,
-            CopySource={'Bucket': bucket_name, 'Key': source_key},
-            Key=dest_key
+        # Download PDF content for Supabase upload
+        pdf_obj = r2_client.get_object(Bucket=bucket_name, Key=source_key)
+        pdf_content = pdf_obj['Body'].read()
+        
+        # Create metadata for the PDF
+        pdf_metadata = {
+            'processed_date': datetime.now().isoformat(),
+            'auctions_found': processing_result.get('auctions_found', 0),
+            'auctions_processed': processing_result.get('auctions_processed', 0),
+            'processing_method': 'webhook-trigger',
+            'source': 'hybrid-cloudflare-vercel-system'
+        }
+        
+        # Upload to Supabase storage
+        storage_result = upload_pdf_to_supabase_storage(
+            pdf_content, 
+            pdf_filename, 
+            pdf_metadata
         )
         
-        # Delete from unprocessed folder
-        r2_client.delete_object(Bucket=bucket_name, Key=source_key)
-        
-        return {'success': True, 'moved': f"{source_key} → {dest_key}"}
+        if storage_result.get('success'):
+            # Delete from R2 unprocessed folder to save storage costs
+            r2_client.delete_object(Bucket=bucket_name, Key=source_key)
+            return {
+                'success': True, 
+                'action': 'uploaded_to_supabase_and_deleted_from_r2',
+                'storage_result': storage_result,
+                'r2_cleanup': f'PDF {pdf_filename} deleted from R2 unprocessed folder'
+            }
+        else:
+            return {
+                'success': False, 
+                'action': 'supabase_upload_failed',
+                'storage_result': storage_result,
+                'note': 'PDF kept in R2 due to upload failure'
+            }
         
     except Exception as e:
-        return {'success': False, 'error': str(e)}
+        return {
+            'success': False, 
+            'action': 'upload_and_cleanup_error',
+            'error': str(e)
+        }
