@@ -257,14 +257,17 @@ Auction text to extract from:
                     else:
                         auction_data = json.loads(content)
                     
-                    # Add metadata (based on your original process)
-                    # Remove auction_number - not in Supabase schema
-                    auction_data['source_pdf'] = pdf_key
-                    auction_data['data_extraction_date'] = datetime.now().strftime("%Y-%m-%d")
+                    # Add metadata matching Supabase schema
+                    auction_data['gov_pdf_name'] = pdf_key  # Use gov_pdf_name instead of source_pdf
+                    auction_data['data_extraction_date'] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")  # timestamp format
                     auction_data['pdf_file_name'] = pdf_key.split('/')[-1]
                     auction_data['sheriff_uuid'] = os.getenv('DEFAULT_SHERIFF_UUID', 'f7c42d1a-2cb8-4d87-a84e-c5a0ec51d130')
                     auction_data['auction_description'] = auction
-                    # Remove tokens_used - not in Supabase schema
+                    # Set default values for other boolean fields
+                    auction_data['sheriff_associated'] = True
+                    auction_data['processed_nearby_sales'] = False
+                    auction_data['online_auction'] = False
+                    auction_data['is_streaming'] = False
                     
                     # Geocode addresses (based on your original process)
                     if google_api_key:
