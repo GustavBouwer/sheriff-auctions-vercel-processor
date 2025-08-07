@@ -19,6 +19,7 @@ import requests
 # Add utils directory to path for imports
 sys.path.append(os.path.join(os.path.dirname(__file__), '..', 'utils'))
 from sheriff_mapping import get_sheriff_uuid, is_sheriff_associated
+from supabase_storage import upload_pdf_to_supabase_storage
 
 
 def extract_area_components(address, api_key):
@@ -385,6 +386,45 @@ Auction text to extract from:
                                     "error": str(e)
                                 })
             
+            # Handle PDF storage after successful processing
+            pdf_storage_result = None
+            if enable_processing and len([r for r in upload_results if r.get('status') == 'success']) > 0:
+                try:
+                    # Create metadata for the PDF
+                    pdf_metadata = {
+                        'processed_date': datetime.now().isoformat(),
+                        'auctions_found': len(auctions),
+                        'auctions_processed': len(processed_auctions),
+                        'processing_cost': f"${total_tokens_used * 0.000002:.4f}",
+                        'source': 'hybrid-cloudflare-vercel-system'
+                    }
+                    
+                    # Upload PDF to Supabase storage
+                    pdf_filename = pdf_key.split('/')[-1]  # Get filename from path
+                    storage_result = upload_pdf_to_supabase_storage(
+                        pdf_content, 
+                        pdf_filename, 
+                        pdf_metadata
+                    )
+                    
+                    if storage_result.get('success'):
+                        # Delete from R2 unprocessed folder to save space
+                        try:
+                            r2_client.delete_object(Bucket=bucket_name, Key=pdf_key)
+                            storage_result['r2_cleanup'] = 'PDF deleted from R2 unprocessed folder'
+                        except Exception as e:
+                            storage_result['r2_cleanup'] = f'R2 cleanup warning: {str(e)}'
+                        
+                        pdf_storage_result = storage_result
+                    else:
+                        pdf_storage_result = storage_result
+                        
+                except Exception as e:
+                    pdf_storage_result = {
+                        'success': False,
+                        'error': f'PDF storage failed: {str(e)}'
+                    }
+            
             # Prepare response
             response_data = {
                 "timestamp": datetime.now().isoformat(),
@@ -399,6 +439,7 @@ Auction text to extract from:
                 "total_tokens_used": total_tokens_used,
                 "estimated_cost": f"${total_tokens_used * 0.000002:.4f}",
                 "supabase_uploads": upload_results if enable_processing else "Upload disabled - test mode",
+                "pdf_storage": pdf_storage_result,
                 "auctions": processed_auctions
             }
             
