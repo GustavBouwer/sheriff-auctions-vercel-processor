@@ -116,7 +116,7 @@ DEFAULT_SHERIFF_UUID=f7c42d1a-2cb8-4d87-a84e-c5a0ec51d130
 | `/api/process-auctions` | ✅ Live | Split and process auctions with OpenAI |
 | `/api/process-complete` | ✅ **PRODUCTION** | **Complete ETL pipeline with Supabase upload** |
 | `/api/update-sheriffs` | ✅ Live | Weekly sheriff mapping cache update |
-| `/api/webhook-process` | ✅ **WEBHOOK** | **Cloudflare Worker notification endpoint** |
+| `/api/webhook-process` | ✅ **WEBHOOK** | **Cloudflare Worker notification with smart storage** |
 
 ### **1. PDF Acquisition (from R2)**
 ```python
@@ -169,7 +169,7 @@ else:
 | Endpoint | Status | Description |
 |----------|--------|-------------|
 | `/api/process-complete` | ✅ **PRODUCTION** | **Complete ETL pipeline with Supabase storage** |
-| `/api/webhook-process` | ✅ **WEBHOOK** | **Cloudflare Worker notification endpoint** |
+| `/api/webhook-process` | ✅ **WEBHOOK** | **Cloudflare Worker notification with smart storage** |
 | `/api/process-manual` | ✅ Live | Manual PDF processing (single or batch) |
 | `/api/monitor` | ✅ **DASHBOARD** | **Comprehensive system health monitoring** |
 | `/api/storage-monitor` | ✅ Live | Supabase storage bucket monitoring |
@@ -342,18 +342,20 @@ vercel --prod
             ▼                                               ▼
 ┌─────────────────────────┐                   ┌─────────────────────────┐
 │     R2 Bucket           │                   │      Supabase          │
-│   unprocessed/PDFs      │                   │   auctions table       │
-│   processed/PDFs        │                   │                       │
+│   unprocessed/PDFs ⚡   │                   │   auctions table       │
+│   (temporary storage)   │                   │   storage bucket ✅     │
 └─────────────────────────┘                   └─────────────────────────┘
 ```
 
-#### **Communication Flow**
+#### **Enhanced Communication Flow with Smart Storage**
 1. **Cloudflare Worker** (`pdf-checker`) runs every 5 minutes (cron job)
 2. **Discovers new PDFs** on SAFLII and downloads to R2 `unprocessed/` folder
 3. **Sends webhook** to Vercel: `POST /api/webhook-process`
 4. **Vercel receives webhook**, processes PDFs (3 auctions max during testing)
-5. **Extracts auction data** with OpenAI and uploads to Supabase
-6. **Moves processed PDFs** from `unprocessed/` to `processed/` folder
+5. **Extracts auction data** with OpenAI and uploads to Supabase database
+6. **Uploads PDF to Supabase storage** (sa-auction-pdf-processed bucket) with metadata
+7. **Deletes PDF from R2 unprocessed/** folder (saves storage costs)
+8. **KV store tracking** prevents re-downloading same PDFs
 
 #### **Webhook Payload Format**
 ```json
@@ -522,13 +524,13 @@ ENABLE_PROCESSING=true  # Enable for production
 - **Token Efficiency**: Individual auction processing proven cost-effective
 - **Safety Controls**: Hard limits prevent runaway costs
 
-### **🔄 Complete Workflow Proven**
-1. ✅ Cloudflare discovers PDFs → Downloads to R2
+### **🔄 Complete Smart Storage Workflow Operational**
+1. ✅ Cloudflare discovers PDFs → Downloads to R2 unprocessed/
 2. ✅ KV tracking prevents duplicates
-3. ✅ Webhook triggers Vercel processing  
-4. ✅ OpenAI extracts auction data
-5. ✅ Supabase database upload
-6. ✅ Supabase storage upload
-7. ✅ R2 cleanup saves costs
+3. ✅ Webhook triggers immediate Vercel processing  
+4. ✅ OpenAI extracts auction data → Supabase database
+5. ✅ PDF uploaded to Supabase storage with metadata
+6. ✅ R2 unprocessed/ cleanup saves ongoing storage costs
+7. ✅ Both webhook and manual processing endpoints support smart storage
 
 **The world's first fully autonomous sheriff auction processing system with smart storage optimization!** 🚀
