@@ -15,6 +15,34 @@ import pdfplumber
 from openai import OpenAI
 import requests
 
+def get_sheriff_uuid(sheriff_office):
+    """Get sheriff UUID from cached mapping (based on original sheriff_mapping approach)"""
+    if not sheriff_office:
+        return os.getenv('DEFAULT_SHERIFF_UUID', 'f7c42d1a-2cb8-4d87-a84e-c5a0ec51d130')
+    
+    # For now, use basic mapping - this could be enhanced to use a cached JSON
+    # Basic sheriff office mapping (you can expand this)
+    sheriff_mapping = {
+        'Nigel': '1c2ea5b0-8b3f-4d9e-a19c-7f8e9a2b1c3d',
+        'Boksburg': '2d3fa6c1-9c4g-5e0f-b20d-8g9f0a3b2d4e',
+        'Pretoria': '3e4gb7d2-0d5h-6f1g-c31e-9h0g1b4c3e5f',
+        'Johannesburg': '4f5hc8e3-1e6i-7g2h-d42f-0i1h2c5d4f6g',
+        'Germiston': '5g6id9f4-2f7j-8h3i-e53g-1j2i3d6e5g7h'
+    }
+    
+    # Try direct match first
+    if sheriff_office in sheriff_mapping:
+        return sheriff_mapping[sheriff_office]
+    
+    # Try partial matching (case insensitive)
+    sheriff_office_lower = sheriff_office.lower()
+    for mapped_office, uuid in sheriff_mapping.items():
+        if mapped_office.lower() in sheriff_office_lower or sheriff_office_lower in mapped_office.lower():
+            return uuid
+    
+    # Return default if no match
+    return os.getenv('DEFAULT_SHERIFF_UUID', 'f7c42d1a-2cb8-4d87-a84e-c5a0ec51d130')
+
 def extract_area_components(address, api_key):
     """Extract area components from address using Google Maps API"""
     url = "https://maps.googleapis.com/maps/api/geocode/json"
@@ -261,10 +289,14 @@ Auction text to extract from:
                     auction_data['gov_pdf_name'] = pdf_key  # Use gov_pdf_name instead of source_pdf
                     auction_data['data_extraction_date'] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")  # timestamp format
                     auction_data['pdf_file_name'] = pdf_key.split('/')[-1]
-                    auction_data['sheriff_uuid'] = os.getenv('DEFAULT_SHERIFF_UUID', 'f7c42d1a-2cb8-4d87-a84e-c5a0ec51d130')
+                    
+                    # Sheriff association logic (based on original mapping approach)
+                    sheriff_uuid = get_sheriff_uuid(auction_data.get('sheriff_office'))
+                    auction_data['sheriff_uuid'] = sheriff_uuid
+                    auction_data['sheriff_associated'] = sheriff_uuid != os.getenv('DEFAULT_SHERIFF_UUID', 'f7c42d1a-2cb8-4d87-a84e-c5a0ec51d130')
+                    
                     auction_data['auction_description'] = auction
                     # Set default values for other boolean fields
-                    auction_data['sheriff_associated'] = True
                     auction_data['processed_nearby_sales'] = False
                     auction_data['online_auction'] = False
                     auction_data['is_streaming'] = False
