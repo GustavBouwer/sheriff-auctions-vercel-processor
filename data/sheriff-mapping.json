@@ -1,0 +1,402 @@
+[
+  {
+    "id": "a4c191ef-2c63-4399-9754-0c85be5aec03",
+    "sheriff_office": "Ba-Phalaborwa (Phalaborwa)"
+  },
+  {
+    "id": "98640b45-38bf-4119-939c-79c57773f326",
+    "sheriff_office": "Giyani"
+  },
+  {
+    "id": "a4c22aed-a34c-4408-879d-9f52e372db7c",
+    "sheriff_office": "Hlanganani (Waterval)"
+  },
+  {
+    "id": "7387e46b-47f0-4f27-8dff-fe6ae2c91ffc",
+    "sheriff_office": "Lenyenye"
+  },
+  {
+    "id": "6ed096e4-4c74-4c3a-a081-b0c0be48c392",
+    "sheriff_office": "Lulekani H/M"
+  },
+  {
+    "id": "1e057bd4-236f-4c2d-bfca-b45bcefa53f4",
+    "sheriff_office": "Malamulele (Thulamela Rural)"
+  },
+  {
+    "id": "5eeeaf3d-7daa-4988-ab94-10a53f7ffe09",
+    "sheriff_office": "Mapulaneng (Bushbuckridge Rural)"
+  },
+  {
+    "id": "793a36ec-3679-4f8e-a815-4d6a2e961b32",
+    "sheriff_office": "Mhala"
+  },
+  {
+    "id": "11302aeb-54c7-469a-ade5-ddf2c223bdd9",
+    "sheriff_office": "Namakgale"
+  },
+  {
+    "id": "3a5e5472-679d-410f-bfd6-52dc8f8f6006",
+    "sheriff_office": "Naphuno"
+  },
+  {
+    "id": "895800b2-3d28-4da9-85a4-1ef51b0ff63e",
+    "sheriff_office": "Thulamahashe"
+  },
+  {
+    "id": "1e2ad455-cb3b-41c5-b733-8dc33c795da7",
+    "sheriff_office": "Vuwani M"
+  },
+  {
+    "id": "8c463a24-b63d-450a-8396-e297de14727e",
+    "sheriff_office": "Bela-Bela (Warmbaths)"
+  },
+  {
+    "id": "0a8958cf-4d2f-4268-b5c1-66ce58f6cd34",
+    "sheriff_office": "Sekgosese"
+  },
+  {
+    "id": "599ec602-7947-4f6e-912f-bd12ca17f79e",
+    "sheriff_office": "Lephalale (Ellisras)"
+  },
+  {
+    "id": "523fc09b-57a0-4753-b54d-a827a6bfd0b6",
+    "sheriff_office": "Gravelotte"
+  },
+  {
+    "id": "80005bc4-1bb2-4d1a-a721-977fa60ddadc",
+    "sheriff_office": "Praktiseer"
+  },
+  {
+    "id": "1a20cab9-52e6-4e83-811c-1ea4b6000f25",
+    "sheriff_office": "Nkowankowa"
+  },
+  {
+    "id": "f6614e17-18f8-4bdf-b651-20a4eb5a9d3f",
+    "sheriff_office": "Ritavi"
+  },
+  {
+    "id": "4e10922d-8307-4aa0-81dd-3e099c761ba2",
+    "sheriff_office": "Groblersdal/Moutse"
+  },
+  {
+    "id": "63070a30-87d4-4610-8df0-d57f81cc7b79",
+    "sheriff_office": "Marblehall"
+  },
+  {
+    "id": "7e37546c-01de-4fa1-8fd9-ce90f6e78dc2",
+    "sheriff_office": "Polokwane (Pietersburg)"
+  },
+  {
+    "id": "77b504d1-9410-41dc-a5e4-9711c1fdc85a",
+    "sheriff_office": "Leydsdorp"
+  },
+  {
+    "id": "8f5650ba-f1ed-46c4-a2f2-54546e6fa43c",
+    "sheriff_office": "Louis Trichardt/Soutpansberg"
+  },
+  {
+    "id": "be3e96cf-1fca-4f58-a055-38ea342ffe5d",
+    "sheriff_office": "Dzanani M"
+  },
+  {
+    "id": "3191f93d-6775-4368-8785-6efa8ed7bc6b",
+    "sheriff_office": "Waterberg H/M (Modimolle/Nylstroom)"
+  },
+  {
+    "id": "0914349c-ba1f-476f-bddc-2219f72d2d0a",
+    "sheriff_office": "Bolobedu H/M"
+  },
+  {
+    "id": "eac2253b-7852-4b47-83be-a6dc4d92c8eb",
+    "sheriff_office": "Lebowakgomo/Thabamoopo"
+  },
+  {
+    "id": "40d15bee-b619-4d43-b76f-85feabdd4013",
+    "sheriff_office": "Mahwelereng"
+  },
+  {
+    "id": "265a83bb-b8f6-4f64-8a3b-9182cce3aecb",
+    "sheriff_office": "Mokopane (Potgietersrus)"
+  },
+  {
+    "id": "991bdcaf-5849-4feb-b05f-5dc97a6af1f2",
+    "sheriff_office": "Bochum"
+  },
+  {
+    "id": "546a275b-8245-4026-8426-d2d099e55aa2",
+    "sheriff_office": "Mookgopong (Naboomspruit)"
+  },
+  {
+    "id": "07f15427-484e-4482-b883-1672b791c19b",
+    "sheriff_office": "Musina"
+  },
+  {
+    "id": "8ae836cf-de1d-4300-b201-97671800a70c",
+    "sheriff_office": "Marulaneng (Hoedspruit)"
+  },
+  {
+    "id": "ee3efc58-54df-419b-b7e6-2cd5bafbe898",
+    "sheriff_office": "Nebo H/M"
+  },
+  {
+    "id": "a3df1833-d122-484f-add4-33816fee62bf",
+    "sheriff_office": "Sekhukhune H/M"
+  },
+  {
+    "id": "7e00955b-562d-42b3-b04d-7e926ec18c70",
+    "sheriff_office": "Mankweng M/H"
+  },
+  {
+    "id": "75274f76-45c5-49b7-9c4f-0c3169efe98a",
+    "sheriff_office": "Seshego"
+  },
+  {
+    "id": "c6ad79b5-f1ef-4c0c-b64c-a79983601573",
+    "sheriff_office": "Thabazimbi H"
+  },
+  {
+    "id": "ac0ef86a-45b0-4775-8e2a-65dd6894f1cc",
+    "sheriff_office": "Thabazimbi M"
+  },
+  {
+    "id": "ca2e2274-a5dd-485e-a46c-2e39979c7251",
+    "sheriff_office": "Mutale H/M"
+  },
+  {
+    "id": "6c85968a-6054-4a5b-87fa-c7234708a983",
+    "sheriff_office": "Thohoyandou"
+  },
+  {
+    "id": "cd8b0792-bfe4-d72-a19d-a9cc70e27189",
+    "sheriff_office": "Tshitale M"
+  },
+  {
+    "id": "c71a2965-ceea-4b12-9c44-85190294be11",
+    "sheriff_office": "Letaba (Tzaneen) H/L"
+  },
+  {
+    "id": "a62c9aec-05ee-4dcc-bb03-74f15e0035b3",
+    "sheriff_office": "Bafokeng M"
+  },
+  {
+    "id": "13b876f4-4332-4879-90c1-c823a60b7079",
+    "sheriff_office": "Brits"
+  },
+  {
+    "id": "cfc0fca2-4cd8-4a04-86c7-faea3c3dba00",
+    "sheriff_office": "Christiana"
+  },
+  {
+    "id": "2fac6e61-133d-487b-a023-dbe6585757e9",
+    "sheriff_office": "Delareyville H/M"
+  },
+  {
+    "id": "d1990d67-4d50-4e59-9c45-03e66961af7e",
+    "sheriff_office": "Ganyesa"
+  },
+  {
+    "id": "ad8dd314-88c7-4b44-af49-343ae357515f",
+    "sheriff_office": "Klerksdorp H/M"
+  },
+  {
+    "id": "22f58be2-f604-4382-99de-bd14d973efe9",
+    "sheriff_office": "Koster"
+  },
+  {
+    "id": "6ac03873-9930-4072-b18a-c5689de514da",
+    "sheriff_office": "Coligny"
+  },
+  {
+    "id": "79963510-196c-4c98-a005-f02fb34fba01",
+    "sheriff_office": "Ditsobotla"
+  },
+  {
+    "id": "71837381-cfd4-4fb3-9b62-52bc1ad8b899",
+    "sheriff_office": "Itsoseng"
+  },
+  {
+    "id": "6dbb1d50-52d6-4314-9653-170595ea1408",
+    "sheriff_office": "Lichtenburg H"
+  },
+  {
+    "id": "ef67e6ad-f781-4620-8499-90666866aff5",
+    "sheriff_office": "Lichtenburg M"
+  },
+  {
+    "id": "e6516b7b-a87e-437e-8150-4ecc8bc323f5",
+    "sheriff_office": "Ottosdal"
+  },
+  {
+    "id": "ead6546f-6ce4-465e-b4c1-701c607fb921",
+    "sheriff_office": "Madikwe"
+  },
+  {
+    "id": "e9d7fd9b-c546-4c6e-a681-ee4edce6b749",
+    "sheriff_office": "Mafikeng H"
+  },
+  {
+    "id": "35935476-226f-4de5-a11e-4edf55c091e1",
+    "sheriff_office": "Mafikeng M"
+  },
+  {
+    "id": "f67a929c-f68b-495d-8a20-9e65818c25d9",
+    "sheriff_office": "Molopo (Mmabatho)"
+  },
+  {
+    "id": "3e0b7ef1-0043-4450-a372-2c12fb949b8a",
+    "sheriff_office": "Mankwe (Mogwase) H/M"
+  },
+  {
+    "id": "b3ffa8fd-7d05-499d-9518-0e05e786fd6a",
+    "sheriff_office": "Orkney"
+  },
+  {
+    "id": "0b9ce865-d87a-40ad-a465-fd191fade057",
+    "sheriff_office": "Potchefstroom H"
+  },
+  {
+    "id": "de77fa39-ae04-4f59-9266-5f32396b68e0",
+    "sheriff_office": "Potchefstroom M"
+  },
+  {
+    "id": "46f9c015-358f-45a3-a1fd-660c00c57a21",
+    "sheriff_office": "Bafokeng H"
+  },
+  {
+    "id": "d04d4af4-f452-4da8-b325-36acf8ce8c2e",
+    "sheriff_office": "Rustenburg H"
+  },
+  {
+    "id": "080343d9-fc15-478b-9da1-c3762469e9fd",
+    "sheriff_office": "Rustenburg M"
+  },
+  {
+    "id": "b499864d-ebe6-4a8f-a228-587199581171",
+    "sheriff_office": "Schweizer Reneke"
+  },
+  {
+    "id": "2dcfb412-10f3-48dd-bdd2-b9cb9d670171",
+    "sheriff_office": "Stilfontein"
+  },
+  {
+    "id": "63f62cb2-f274-450a-b267-0eeba35afdf4",
+    "sheriff_office": "Swartruggens"
+  },
+  {
+    "id": "8a8d4a64-7060-4a8b-a0a4-e2657a36ae6e",
+    "sheriff_office": "Taung"
+  },
+  {
+    "id": "b00b7ab4-e95a-4b76-9ee9-94386381a12d",
+    "sheriff_office": "Tlhabane H"
+  },
+  {
+    "id": "194f2109-e888-476f-807c-2e0f454cb4b7",
+    "sheriff_office": "Tlhabane M"
+  },
+  {
+    "id": "858e7a68-827b-40e2-9346-415fef1c68c7",
+    "sheriff_office": "Ventersdorp"
+  },
+  {
+    "id": "762b304f-a4ab-4598-ad26-48ee50639bb0",
+    "sheriff_office": "Vryburg"
+  },
+  {
+    "id": "2d2c28c3-9685-427f-8b43-035648f5e2a6",
+    "sheriff_office": "Wolmaranstad"
+  },
+  {
+    "id": "afc98bff-4545-482d-9c5a-e9574cfece21",
+    "sheriff_office": "Lehurutshe"
+  },
+  {
+    "id": "780db9e4-7fe6-406f-a559-b97702d61dd1",
+    "sheriff_office": "Zeerust"
+  },
+  {
+    "id": "edf2b93a-a655-4e27-8cd5-8828e61333ec",
+    "sheriff_office": "Johannesburg East"
+  },
+  {
+    "id": "ae0423d9-492d-4406-ba6c-653dcb913bb5",
+    "sheriff_office": "Johannesburg South"
+  },
+  {
+    "id": "6ae20d2f-708c-4689-88d0-e239b3e3c779",
+    "sheriff_office": "Palm Ridge (Alberton)"
+  },
+  {
+    "id": "0e47978e-25d6-489c-b486-929df25df40c",
+    "sheriff_office": "Benoni H"
+  },
+  {
+    "id": "0e22fd3e-9ce0-463c-be20-1a9f88d0741c",
+    "sheriff_office": "Benoni M"
+  },
+  {
+    "id": "23af5f09-eafb-4a6f-b970-1cfb3f614689",
+    "sheriff_office": "Boksburg"
+  },
+  {
+    "id": "949ba426-793c-494e-94f8-ba267b4e03e2",
+    "sheriff_office": "Brakpan"
+  },
+  {
+    "id": "a140a2da-6285-4d91-81a3-25552ee9defc",
+    "sheriff_office": "Bronkhorstspruit"
+  },
+  {
+    "id": "7ee0904a-6363-4005-b797-868b5204b76d",
+    "sheriff_office": "Mkobola"
+  },
+  {
+    "id": "555b52c9-8c5f-4e44-9820-a044aed91296",
+    "sheriff_office": "Centurion East"
+  },
+  {
+    "id": "5c04b8a2-c210-4496-9eeb-f5fcc706065e",
+    "sheriff_office": "Centurion West"
+  },
+  {
+    "id": "6bd52338-75e4-461a-9d0d-9b1d036ce623",
+    "sheriff_office": "Cullinan"
+  },
+  {
+    "id": "dec738ee-20be-4398-bcfc-4eade6c7f5e2",
+    "sheriff_office": "Germiston North"
+  },
+  {
+    "id": "d3c3f719-cf5b-426d-a6c1-c7b02ca5b3ab",
+    "sheriff_office": "Germiston South"
+  },
+  {
+    "id": "b85edf8d-dfcf-4c9a-979c-0383f53926eb",
+    "sheriff_office": "Heidelberg"
+  },
+  {
+    "id": "b7aba123-b61d-46dc-a0c8-86beffca659a",
+    "sheriff_office": "Johannesburg Central"
+  },
+  {
+    "id": "5ccb2636-addb-4bea-aa3b-041cc1b76262",
+    "sheriff_office": "Ekurhuleni North (Kempton/Tembisa)"
+  },
+  {
+    "id": "e4324699-42fd-4cd1-b0fa-892f4e54938a",
+    "sheriff_office": "Krugersdorp"
+  },
+  {
+    "id": "50e109d8-30c1-4e63-9b65-9f158c0b0986",
+    "sheriff_office": "Odi (Ga-Rankuwa) HL"
+  },
+  {
+    "id": "1b262895-9577-44ed-a075-19aa61e0315c",
+    "sheriff_office": "Meyerton H/M"
+  },
+  {
+    "id": "1fc28a71-acc1-48d0-9758-39fe8e860410",
+    "sheriff_office": "Halfway House - Alexandra"
+  }
+]
