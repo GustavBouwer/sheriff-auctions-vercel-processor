@@ -16,7 +16,7 @@ sys.path.append(os.path.join(os.path.dirname(__file__), '..', 'utils'))
 from sheriff_mapping import get_sheriff_uuid, is_sheriff_associated
 
 # Simple processing functions
-async def process_single_pdf(pdf_key):
+def process_single_pdf(pdf_key):
     """Basic PDF processing - calls the main process-complete endpoint"""
     try:
         import requests
@@ -36,7 +36,7 @@ async def process_single_pdf(pdf_key):
             'error': str(e)
         }
 
-async def move_pdf_to_processed(pdf_filename):
+def move_pdf_to_processed(pdf_filename):
     """Move PDF from unprocessed to processed folder"""
     try:
         import boto3
@@ -164,12 +164,12 @@ class handler(BaseHTTPRequestHandler):
             self.end_headers()
             self.wfile.write(json.dumps(error_response, indent=2).encode())
     
-    async def process_specific_pdf(self, pdf_filename):
+    def process_specific_pdf(self, pdf_filename):
         """Process a specific PDF from unprocessed folder"""
         try:
             if pdf_filename == 'all':
                 # Process all unprocessed PDFs
-                return await self.process_all_pdfs()
+                return self.process_all_pdfs()
             
             # Process single PDF
             pdf_key = f"unprocessed/{pdf_filename}"
@@ -177,11 +177,11 @@ class handler(BaseHTTPRequestHandler):
             print(f"Processing PDF: {pdf_key}")
             
             # Use the same processing logic as webhook
-            result = await process_single_pdf(pdf_key)
+            result = process_single_pdf(pdf_key)
             
             # Move to processed folder if successful
             if result.get('status') == 'success':
-                move_result = await move_pdf_to_processed(pdf_filename)
+                move_result = move_pdf_to_processed(pdf_filename)
                 result['move_result'] = move_result
             
             response_data = {
@@ -221,7 +221,7 @@ class handler(BaseHTTPRequestHandler):
             self.end_headers()
             self.wfile.write(json.dumps(error_response, indent=2).encode())
     
-    async def process_all_pdfs(self):
+    def process_all_pdfs(self):
         """Process all PDFs in unprocessed folder"""
         try:
             import boto3
@@ -268,11 +268,11 @@ class handler(BaseHTTPRequestHandler):
                     
                     try:
                         # Process PDF
-                        result = await process_single_pdf(obj['Key'])
+                        result = process_single_pdf(obj['Key'])
                         
                         # Move if successful
                         if result.get('status') == 'success':
-                            move_result = await move_pdf_to_processed(filename)
+                            move_result = move_pdf_to_processed(filename)
                             result['move_result'] = move_result
                             processed_count += 1
                         else:
