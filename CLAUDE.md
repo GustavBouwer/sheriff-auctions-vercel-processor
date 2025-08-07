@@ -114,7 +114,9 @@ DEFAULT_SHERIFF_UUID=f7c42d1a-2cb8-4d87-a84e-c5a0ec51d130
 | `/api/debug-r2` | ✅ Live | Debug R2 connection and list objects |
 | `/api/process-single` | ✅ Live | Extract text from single PDF |
 | `/api/process-auctions` | ✅ Live | Split and process auctions with OpenAI |
-| `/api/process` | 🔄 Next | Full ETL pipeline with Supabase upload |
+| `/api/process-complete` | ✅ **PRODUCTION** | **Complete ETL pipeline with Supabase upload** |
+| `/api/update-sheriffs` | ✅ Live | Weekly sheriff mapping cache update |
+| `/api/webhook-process` | ✅ **WEBHOOK** | **Cloudflare Worker notification endpoint** |
 
 ### **1. PDF Acquisition (from R2)**
 ```python
@@ -306,11 +308,67 @@ vercel --prod
 - [x] Configure all environment variables ✅
 - [x] Test with single PDF first ✅ (test-989.pdf)
 - [x] Verify OpenAI integration ✅ (3 auctions extracted)
-- [ ] Implement Supabase upload
+- [x] Implement Supabase upload ✅
+- [x] Add sheriff association system ✅
+- [x] Setup webhook communication with Cloudflare ✅
+- [x] Add PDF movement to processed folder ✅
 - [ ] Monitor OpenAI usage dashboard
 - [ ] Set up cost alerts
-- [ ] Verify Supabase uploads
-- [ ] Check R2 file movements
+
+### **🔗 CLOUDFLARE ↔ VERCEL COMMUNICATION SYSTEM**
+
+#### **System Architecture Overview**
+```
+┌─────────────────────────┐    📡 WEBHOOK     ┌─────────────────────────┐
+│   Cloudflare Worker     │ ═══════════════▶  │   Vercel Python API     │
+│   (PDF Discovery)       │                   │   (PDF Processing)      │
+└─────────────────────────┘                   └─────────────────────────┘
+            │                                               │
+            ▼                                               ▼
+┌─────────────────────────┐                   ┌─────────────────────────┐
+│     R2 Bucket           │                   │      Supabase          │
+│   unprocessed/PDFs      │                   │   auctions table       │
+│   processed/PDFs        │                   │                       │
+└─────────────────────────┘                   └─────────────────────────┘
+```
+
+#### **Communication Flow**
+1. **Cloudflare Worker** (`pdf-checker`) runs every 5 minutes (cron job)
+2. **Discovers new PDFs** on SAFLII and downloads to R2 `unprocessed/` folder
+3. **Sends webhook** to Vercel: `POST /api/webhook-process`
+4. **Vercel receives webhook**, processes PDFs (3 auctions max during testing)
+5. **Extracts auction data** with OpenAI and uploads to Supabase
+6. **Moves processed PDFs** from `unprocessed/` to `processed/` folder
+
+#### **Webhook Payload Format**
+```json
+{
+  "secret": "sheriff-auctions-webhook-2025",
+  "event": "new_pdfs_ready", 
+  "timestamp": "2025-08-07T18:00:00Z",
+  "pdf_files": ["2025-989.pdf", "2025-990.pdf"],
+  "pdf_count": 2,
+  "source": "cloudflare-pdf-checker"
+}
+```
+
+#### **Environment Variables for Webhook System**
+```env
+# Cloudflare Worker Variables
+ENABLE_WEBHOOK_NOTIFICATIONS=true
+VERCEL_WEBHOOK_URL=https://sheriff-auctions-data-etl-zzd2.vercel.app/api/webhook-process
+WEBHOOK_SECRET=sheriff-auctions-webhook-2025
+
+# Vercel Variables  
+WEBHOOK_SECRET=sheriff-auctions-webhook-2025
+ENABLE_PROCESSING=true  # Enable for production
+```
+
+#### **Sheriff Association System**
+- **Weekly Update**: Call `/api/update-sheriffs` to refresh sheriff mapping cache
+- **Mapping Logic**: Maps extracted `sheriff_office` to `sheriff_uuid` for RLS
+- **Fallback**: Uses `DEFAULT_SHERIFF_UUID` if no match found
+- **Association**: Sets `sheriff_associated = true/false` based on mapping success
 
 ## 📊 **Monitoring & Maintenance**
 
