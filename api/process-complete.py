@@ -110,7 +110,7 @@ class handler(BaseHTTPRequestHandler):
                             break
                         raw_text += f"{page_text}\n"
             
-            # Clean text (based on your original clean_text function)
+            # Clean text (improved to prevent JSON issues)
             def clean_text(text):
                 patterns_to_remove = [
                     r"STAATSKOERANT[^\n]*", r"GOVERNMENT GAZETTE[^\n]*", r"No\.\s*\d+\s*",
@@ -123,8 +123,10 @@ class handler(BaseHTTPRequestHandler):
                 ]
                 for pattern in patterns_to_remove:
                     text = re.sub(pattern, '', text, flags=re.IGNORECASE)
-                text = re.sub(r' +', ' ', text.replace('\n', ' ').replace('\t', ' ')).strip()
-                return text.replace('\\\\', '\\\\').replace('"', '\\"')
+                # Replace multiple spaces and newlines with single space
+                text = re.sub(r'\s+', ' ', text).strip()
+                # Don't escape quotes here - let Python handle it in the prompt
+                return text
             
             # Split into auctions (based on your original split_into_auctions)
             def split_into_auctions(text):
@@ -195,11 +197,13 @@ class handler(BaseHTTPRequestHandler):
             total_tokens_used = 0
             
             for i, auction in enumerate(auctions):
-                # Your exact fine-tuned prompt
+                # Your exact fine-tuned prompt - with explicit NO MARKDOWN instruction
                 prompt = f"""You are a data extractor. From the following sheriff auction notices, extract these fields for each auction as a JSON array of objects. Ensure the output is fully JSON-compliant:
 - Use the following fields, data formats, and constraints:
 {json.dumps(auction_fields, indent=2)}
 - Ensure the JSON is valid and contains no extra text, comments, or formatting.
+- Do NOT wrap the JSON in markdown code blocks (no ```json or ``` tags).
+- Return ONLY the raw JSON array, starting with [ and ending with ].
 - Escape special characters like quotes (\"), newlines (\\n), and backslashes (\\).
 - Remove any non-ASCII characters or unexpected symbols that could cause JSON parsing errors.
 - If a value is missing or unknown, return 'None' (not NaN, not '', not 'unknown') and if it is a bigint, return it as 0.
@@ -222,11 +226,22 @@ Auction text:
                     
                     total_tokens_used += response.usage.total_tokens
                     
-                    # Parse response - should be JSON array
+                    # Parse response - handle markdown code blocks and JSON
                     content = response.choices[0].message.content.strip()
                     
-                    # Debug: Log the raw response for troubleshooting
-                    print(f"Raw OpenAI response for auction {i+1}: {content[:200]}...")
+                    # Remove markdown code block if present
+                    if content.startswith('```json'):
+                        content = content[7:]  # Remove ```json
+                    elif content.startswith('```'):
+                        content = content[3:]  # Remove ```
+                    
+                    if content.endswith('```'):
+                        content = content[:-3]  # Remove trailing ```
+                    
+                    content = content.strip()
+                    
+                    # Debug: Log the cleaned response
+                    print(f"Cleaned OpenAI response for auction {i+1}: {content[:200]}...")
                     
                     if content.startswith('['):
                         extracted_data = json.loads(content)
