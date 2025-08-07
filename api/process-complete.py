@@ -198,19 +198,24 @@ class handler(BaseHTTPRequestHandler):
             
             for i, auction in enumerate(auctions):
                 # Your exact fine-tuned prompt - with explicit NO MARKDOWN instruction
-                prompt = f"""You are a data extractor. From the following sheriff auction notices, extract these fields for each auction as a JSON array of objects. Ensure the output is fully JSON-compliant:
-- Use the following fields, data formats, and constraints:
-{json.dumps(auction_fields, indent=2)}
-- Ensure the JSON is valid and contains no extra text, comments, or formatting.
-- Do NOT wrap the JSON in markdown code blocks (no ```json or ``` tags).
-- Return ONLY the raw JSON array, starting with [ and ending with ].
-- Escape special characters like quotes (\"), newlines (\\n), and backslashes (\\).
-- Remove any non-ASCII characters or unexpected symbols that could cause JSON parsing errors.
-- If a value is missing or unknown, return 'None' (not NaN, not '', not 'unknown') and if it is a bigint, return it as 0.
-- Do NOT include any free text outside of the JSON.
-- If you are unsure about finding any data pass a JSON with None values for the text fields and 0 for number fields, pass the date as '2000-01-01' and time as '00:00:00'.
+                prompt = f"""You are a data extractor. From the following sheriff auction notice, extract the VALUES for these fields and return as a JSON array with ONE object.
 
-Auction text:
+Field specifications (extract the VALUES for each of these):
+{json.dumps(auction_fields, indent=2)}
+
+IMPORTANT INSTRUCTIONS:
+- Return a JSON array containing ONE object with the extracted VALUES
+- Each key should be the column_name, each value should be the extracted data
+- Do NOT return the field definitions, return the actual VALUES from the auction text
+- Do NOT wrap the JSON in markdown code blocks (no ```json or ``` tags)
+- Return ONLY the raw JSON array, starting with [ and ending with ]
+- If a value is missing or unknown, return 'None' for text fields and 0 for number fields
+- For missing dates use '2000-01-01' and missing times use '00:00:00'
+- Do NOT include any explanatory text outside of the JSON
+
+Example format: [{{"case_number": "123/2024", "court_name": "Gauteng Division", ...}}]
+
+Auction text to extract from:
 {auction}"""
                 
                 try:
@@ -253,13 +258,13 @@ Auction text:
                         auction_data = json.loads(content)
                     
                     # Add metadata (based on your original process)
-                    auction_data['auction_number'] = i + 1
+                    # Remove auction_number - not in Supabase schema
                     auction_data['source_pdf'] = pdf_key
                     auction_data['data_extraction_date'] = datetime.now().strftime("%Y-%m-%d")
                     auction_data['pdf_file_name'] = pdf_key.split('/')[-1]
                     auction_data['sheriff_uuid'] = os.getenv('DEFAULT_SHERIFF_UUID', 'f7c42d1a-2cb8-4d87-a84e-c5a0ec51d130')
                     auction_data['auction_description'] = auction
-                    auction_data['tokens_used'] = response.usage.total_tokens
+                    # Remove tokens_used - not in Supabase schema
                     
                     # Geocode addresses (based on your original process)
                     if google_api_key:
@@ -299,6 +304,8 @@ Auction text:
                                 auction_data['house_province'] = None
                                 auction_data['house_coordinates'] = None
                     
+                    # Add auction_number for display (but remove before upload)
+                    auction_data['auction_number'] = i + 1
                     processed_auctions.append(auction_data)
                     
                     # Check token limits
@@ -333,6 +340,10 @@ Auction text:
                     for auction_data in processed_auctions:
                         if 'error' not in auction_data:
                             try:
+                                # Create a copy without auction_number for upload
+                                upload_data = auction_data.copy()
+                                upload_data.pop('auction_number', None)  # Remove auction_number
+                                
                                 # Upload to Supabase auctions table
                                 headers = {
                                     'apikey': supabase_key,
@@ -342,7 +353,7 @@ Auction text:
                                 }
                                 
                                 upload_url = f"{supabase_url}/rest/v1/auctions"
-                                upload_response = requests.post(upload_url, json=auction_data, headers=headers)
+                                upload_response = requests.post(upload_url, json=upload_data, headers=headers)
                                 
                                 if upload_response.status_code in [200, 201]:
                                     upload_results.append({"case_number": auction_data.get('case_number'), "status": "success"})
