@@ -14,6 +14,7 @@ import boto3
 import pdfplumber
 from openai import OpenAI
 import requests
+import traceback
 
 # Add utils directory to path for imports
 sys.path.append(os.path.join(os.path.dirname(__file__), '..', 'utils'))
@@ -301,13 +302,129 @@ def process_single_pdf(pdf_key):
             })
         else:
             print(f"✅ ENABLE_PROCESSING is true - proceeding with OpenAI processing")
-            # TODO: Implement full OpenAI processing logic here
-            processed_count = len(auctions)
+            
+            # Initialize processed count
+            processed_count = 0
+            
+            # Process each auction with OpenAI
+            for i, auction in enumerate(auctions, 1):
+                print(f"🤖 Processing auction {i}/{len(auctions)} with OpenAI...")
+                
+                try:
+                    # Your fine-tuned auction fields specification (from process-complete.py)
+                    auction_fields = [
+                        {"column_name": "case_number", "data_type": "text", "allow_null": False, "additional_info": "The official case number for the auction, typically in the format '1234/2024'."},
+                        {"column_name": "court_name", "data_type": "text", "allow_null": True, "additional_info": "The name of the court where the case is filed (e.g., 'Gauteng Division, Pretoria')."},
+                        {"column_name": "plaintiff", "data_type": "text", "allow_null": True, "additional_info": "Name of the plaintiff or applicant in the case."},
+                        {"column_name": "defendant", "data_type": "text", "allow_null": True, "additional_info": "Name(s) of the defendant(s) or respondent(s) in the case."},
+                        {"column_name": "sheriff_office", "data_type": "text", "allow_null": True, "additional_info": "Name of the sheriff's office conducting the auction. Exclude words like acting, sheriff, office, the high court, and just return the name. Return it as a proper Noun not all caps. This should be the name of the area, not the name of the sheriff"}
+                    ]
+                    
+                    # Create OpenAI prompt
+                    prompt = f"""You are a data extractor. From the following sheriff auction notice, extract the VALUES for these fields and return as a JSON array with ONE object.
+
+Field specifications (extract the VALUES for each of these):
+{json.dumps(auction_fields, indent=2)}
+
+IMPORTANT INSTRUCTIONS:
+- Return a JSON array containing ONE object with the extracted VALUES
+- Each key should be the column_name, each value should be the extracted data
+- Do NOT return the field definitions, return the actual VALUES from the auction text
+- Do NOT wrap the JSON in markdown code blocks (no ```json or ``` tags)
+- Return ONLY the raw JSON array, starting with [ and ending with ]
+- If a value is missing or unknown, return 'None' for text fields
+
+Example format: [{{"case_number": "123/2024", "court_name": "Gauteng Division", ...}}]
+
+Auction text to extract from:
+{auction}"""
+                    
+                    response = openai_client.chat.completions.create(
+                        model="gpt-3.5-turbo",
+                        messages=[
+                            {"role": "system", "content": "You are a data extraction assistant. Return only valid JSON array."},
+                            {"role": "user", "content": prompt}
+                        ],
+                        max_tokens=1500,
+                        temperature=0.1
+                    )
+                    
+                    # Parse OpenAI response
+                    content = response.choices[0].message.content.strip()
+                    
+                    # Remove markdown code blocks if present
+                    if content.startswith('```json'):
+                        content = content[7:]  # Remove ```json
+                    elif content.startswith('```'):
+                        content = content[3:]  # Remove ```
+                    
+                    if content.endswith('```'):
+                        content = content[:-3]  # Remove trailing ```
+                    
+                    content = content.strip()
+                    
+                    print(f"📋 OpenAI response for auction {i}: {content[:100]}...")
+                    
+                    if content.startswith('['):
+                        extracted_data = json.loads(content)
+                        if isinstance(extracted_data, list) and len(extracted_data) > 0:
+                            auction_data = extracted_data[0]  # Take first item from array
+                        else:
+                            raise ValueError("Empty array returned")
+                    else:
+                        auction_data = json.loads(content)
+                    
+                    # Add metadata
+                    auction_data['gov_pdf_name'] = pdf_key
+                    auction_data['data_extraction_date'] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                    auction_data['pdf_file_name'] = pdf_key.split('/')[-1]
+                    
+                    # Sheriff association
+                    sheriff_uuid = get_sheriff_uuid(auction_data.get('sheriff_office'))
+                    auction_data['sheriff_uuid'] = sheriff_uuid
+                    auction_data['sheriff_associated'] = is_sheriff_associated(sheriff_uuid)
+                    
+                    auction_data['auction_description'] = auction
+                    auction_data['processed_nearby_sales'] = False
+                    auction_data['online_auction'] = False
+                    auction_data['is_streaming'] = False
+                    
+                    print(f"📤 Uploading auction {i} to Supabase database...")
+                    
+                    # Upload to Supabase auctions table
+                    supabase_url = os.getenv('SUPABASE_URL')
+                    supabase_key = os.getenv('SUPABASE_KEY')
+                    
+                    headers = {
+                        'apikey': supabase_key,
+                        'Authorization': f'Bearer {supabase_key}',
+                        'Content-Type': 'application/json',
+                        'Prefer': 'return=minimal'
+                    }
+                    
+                    # Remove auction_number if exists
+                    upload_data = auction_data.copy()
+                    upload_data.pop('auction_number', None)
+                    
+                    upload_url = f"{supabase_url}/rest/v1/auctions"
+                    upload_response = requests.post(upload_url, json=upload_data, headers=headers)
+                    
+                    if upload_response.status_code in [200, 201]:
+                        print(f"✅ Auction {i} uploaded successfully to Supabase")
+                        processed_count += 1
+                    else:
+                        print(f"❌ Auction {i} upload failed: {upload_response.status_code} - {upload_response.text}")
+                        
+                except Exception as e:
+                    print(f"❌ Auction {i} processing failed: {str(e)}")
+                    print(f"   Traceback: {traceback.format_exc()}")
+                    continue
+            
             upload_results.append({
                 'status': 'processed',
                 'auctions_found': len(auctions),
                 'auctions_extracted': processed_count,
-                'note': 'Basic processing completed - full OpenAI logic needed'
+                'note': f'OpenAI processing completed - {processed_count}/{len(auctions)} auctions uploaded to Supabase'
             })
         
         result = {
@@ -347,6 +464,8 @@ def process_single_pdf(pdf_key):
 def upload_and_cleanup_pdf(pdf_filename, processing_result):
     """Upload PDF to Supabase storage and delete from R2 unprocessed folder"""
     try:
+        print(f"📤 Starting upload and cleanup for: {pdf_filename}")
+        
         r2_client = boto3.client(
             's3',
             endpoint_url=os.getenv('R2_ENDPOINT_URL'),
@@ -358,9 +477,27 @@ def upload_and_cleanup_pdf(pdf_filename, processing_result):
         bucket_name = os.getenv('R2_BUCKET_NAME', 'sheriff-auction-pdfs')
         source_key = f"unprocessed/{pdf_filename}"
         
+        print(f"📁 Looking for PDF at R2 key: {source_key}")
+        print(f"📦 Using bucket: {bucket_name}")
+        
         # Download PDF content for Supabase upload
-        pdf_obj = r2_client.get_object(Bucket=bucket_name, Key=source_key)
-        pdf_content = pdf_obj['Body'].read()
+        print(f"📈 Downloading PDF from R2 for Supabase upload...")
+        
+        try:
+            # List files in unprocessed folder first
+            list_result = r2_client.list_objects_v2(Bucket=bucket_name, Prefix='unprocessed/', MaxKeys=10)
+            available_files = [obj['Key'] for obj in list_result.get('Contents', [])]
+            print(f"📁 Available files in unprocessed/: {available_files}")
+            
+            pdf_obj = r2_client.get_object(Bucket=bucket_name, Key=source_key)
+            pdf_content = pdf_obj['Body'].read()
+            pdf_size = len(pdf_content)
+            
+            print(f"✅ Downloaded {pdf_filename} from R2: {pdf_size} bytes")
+            
+        except Exception as download_error:
+            print(f"❌ Failed to download {source_key} from R2: {str(download_error)}")
+            raise download_error
         
         # Create metadata for the PDF
         pdf_metadata = {
@@ -372,20 +509,30 @@ def upload_and_cleanup_pdf(pdf_filename, processing_result):
         }
         
         # Upload to Supabase storage
+        print(f"📤 Uploading to Supabase storage with filename: {pdf_filename}")
+        print(f"📊 Metadata: {pdf_metadata}")
+        
         storage_result = upload_pdf_to_supabase_storage(
             pdf_content, 
             pdf_filename, 
             pdf_metadata
         )
         
+        print(f"📊 Storage result: {storage_result}")
+        
         if storage_result.get('success'):
             # Delete from R2 unprocessed folder to save storage costs
+            print(f"🗊 Deleting {source_key} from R2 unprocessed folder...")
             r2_client.delete_object(Bucket=bucket_name, Key=source_key)
+            print(f"✅ Successfully deleted {source_key} from R2")
+            
             return {
                 'success': True, 
                 'action': 'uploaded_to_supabase_and_deleted_from_r2',
                 'storage_result': storage_result,
-                'r2_cleanup': f'PDF {pdf_filename} deleted from R2 unprocessed folder'
+                'r2_cleanup': f'PDF {pdf_filename} deleted from R2 unprocessed folder',
+                'uploaded_filename': pdf_filename,
+                'uploaded_size': pdf_size
             }
         else:
             return {
@@ -396,8 +543,11 @@ def upload_and_cleanup_pdf(pdf_filename, processing_result):
             }
         
     except Exception as e:
+        print(f"❌ Upload and cleanup failed for {pdf_filename}: {str(e)}")
+        print(f"   Traceback: {traceback.format_exc()}")
         return {
             'success': False, 
             'action': 'upload_and_cleanup_error',
-            'error': str(e)
+            'error': str(e),
+            'pdf_filename': pdf_filename
         }
