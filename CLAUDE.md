@@ -264,20 +264,31 @@ curl -X POST "https://your-app.vercel.app/api/process?max_pdfs=1"
 - Schema validation before database upload
 - Case number uniqueness enforced
 
-## 📊 **Current Test Results** (August 6, 2025)
+## 📊 **Current Test Results** (August 8, 2025)
+
+### **Recently Fixed Components** ✅
+1. **SAFLII PDF Discovery**: Fixed URL conversion from .html to .pdf for direct downloads
+2. **Webhook Processing**: Implemented real OpenAI processing (was placeholder before)
+3. **Comprehensive Logging**: Added detailed logging throughout webhook processing pipeline
+4. **R2 Consistency**: Added 2-second delay after PDF upload before webhook notification
+5. **Queued Webhooks**: Batches of 3 PDFs with 10-second delays between batches
 
 ### **Successfully Tested Components** ✅
-1. **PDF Download from R2**: test-989.pdf (2.38MB, 180 pages)
+1. **PDF Download from R2**: test-989.pdf (2.38MB, 180 pages) and 2025-176.pdf
 2. **Text Extraction**: Starting from page 13, stopping at PAUC
 3. **Auction Splitting**: 173 auctions found using regex pattern
-4. **OpenAI Integration**: Successfully extracted structured data
-5. **Data Fields Extracted**:
+4. **OpenAI Integration**: Real structured data extraction with GPT-3.5-turbo
+5. **Webhook Communication**: 200 OK responses from Vercel processing
+6. **Data Fields Extracted**:
    - Case numbers, court details, plaintiff/defendant
    - Property descriptions, addresses, reserve prices
    - Auction dates, times, sheriff offices
    - Property improvements and zoning
 
 ### **Known Issues Resolved** ✅
+- **SAFLII URL Processing**: Fixed to use direct .pdf URLs instead of HTML processing
+- **OpenAI Processing**: Implemented actual GPT processing instead of placeholder responses
+- **File Upload Errors**: Enhanced logging to track correct PDF filenames through processing
 - **OpenAI/httpx compatibility**: Fixed with openai==1.55.3 + httpx==0.27.2
 - **R2 credentials**: Requires R2-specific API tokens (32 chars)
 - **PDF memory handling**: Using BytesIO for pdfplumber
@@ -347,15 +358,15 @@ vercel --prod
 └─────────────────────────┘                   └─────────────────────────┘
 ```
 
-#### **Enhanced Communication Flow with SAFLII HTML Processing**
+#### **Enhanced Communication Flow with Direct PDF Processing**
 1. **Cloudflare Worker** (`pdf-checker`) runs every 5 minutes (cron job)
 2. **Discovers Legal Notice B HTML pages** on SAFLII main page
-3. **Requests HTML pages and waits 15 seconds** for SAFLII processing (critical fix)
-4. **SAFLII serves PDF content from HTML pages** (not direct PDF URLs)
+3. **Converts .html URLs to .pdf URLs** for direct PDF download (critical fix)
+4. **SAFLII serves PDF content directly** from .pdf URLs (no HTML processing needed)
 5. **Downloads PDFs to R2 unprocessed/** folder and marks as seen in KV store
-6. **Sends webhook** to Vercel: `POST /api/webhook-process`
-7. **Vercel receives webhook**, processes PDFs (3 auctions max during testing)
-8. **Extracts auction data** with OpenAI and uploads to Supabase database
+6. **Waits 2 seconds for R2 consistency**, then sends queued webhooks to Vercel
+7. **Vercel receives webhook batches**, processes PDFs with comprehensive logging
+8. **Extracts auction data** with OpenAI (real processing, not placeholder) and uploads to Supabase database
 9. **Uploads PDF to Supabase storage** (sa-auction-pdf-processed bucket) with metadata
 10. **Deletes PDF from R2 unprocessed/** folder (saves storage costs)
 
@@ -426,32 +437,32 @@ ENABLE_PROCESSING=true  # Enable for production
 
 ## 🆘 **Troubleshooting**
 
-### **🔥 CRITICAL: SAFLII HTML Processing Issue (August 2025)**
+### **🔥 RESOLVED: SAFLII PDF Processing Issue (August 2025)**
 
 **Problem**: System stopped working, no new PDFs being discovered
-**Root Cause**: SAFLII serves PDF content FROM HTML pages after processing, not from direct PDF URLs
+**Root Cause**: SAFLII changed to serve PDFs directly at .pdf URLs instead of HTML processing
 **Solution Applied**: 
-- ✅ Cloudflare Worker now requests HTML pages (not PDF URLs)
-- ✅ Waits 15 seconds for SAFLII HTML-to-PDF processing
-- ✅ SAFLII serves PDF content from HTML endpoints
-- ✅ Mimics browser behavior: Click HTML → Wait → Get PDF
+- ✅ Cloudflare Worker now requests direct .pdf URLs (not HTML pages)
+- ✅ Fixed URL conversion: `.html` → `.pdf` for direct PDF access
+- ✅ Removed unnecessary 15-second delays for HTML processing
+- ✅ Implemented queued webhook system for batched processing
 
-**Key Understanding**: SAFLII URLs like `989.html` take 5-15 seconds to process before serving PDF content
+**Key Fix**: SAFLII now serves PDFs directly at `989.pdf` URLs without HTML processing delays
 
 ### **Common Issues**
 
 **PDF Not Processing**
 - Check `ENABLE_PROCESSING` is true
 - Verify PDF exists in R2 `unprocessed/` folder
-- Check Vercel function logs
+- Check Vercel function logs for detailed processing information
 - Ensure API keys are valid
-- **NEW**: Check if Cloudflare Worker is properly requesting HTML pages (not PDF URLs)
+- **FIXED**: Vercel now performs actual OpenAI processing (was placeholder before)
 
 **No New PDFs Discovered**
-- **FIRST CHECK**: Verify Cloudflare Worker is using HTML URLs, not PDF URLs
+- **RESOLVED**: Cloudflare Worker now uses direct .pdf URLs for reliable downloads
 - Check SAFLII page structure hasn't changed
 - Verify Legal Notice B filtering logic
-- Ensure 15-second processing delay is configured
+- Monitor queued webhook system for batch processing
 
 **High OpenAI Costs**
 - Reduce `MAX_AUCTIONS_PER_RUN`
