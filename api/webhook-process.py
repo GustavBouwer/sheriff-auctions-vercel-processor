@@ -327,14 +327,25 @@ def process_single_pdf(pdf_key, processing_id="unknown"):
             total_tokens_used = 0
             max_tokens = int(os.getenv('MAX_OPENAI_TOKENS_PER_RUN', '100000'))
             
-            # Batch auctions to stay within 15-minute Vercel limit
-            AUCTION_BATCH_SIZE = 50
+            # Batch auctions to stay within 13-minute Vercel limit (800 seconds)
+            # Reduce batch size and add progress tracking
+            AUCTION_BATCH_SIZE = 30  # Smaller batches for better timeout management
             auction_batches = [auctions[i:i + AUCTION_BATCH_SIZE] for i in range(0, len(auctions), AUCTION_BATCH_SIZE)]
             
             print(f"[{processing_id}] 📦 Processing {len(auctions)} auctions in {len(auction_batches)} batches of {AUCTION_BATCH_SIZE}")
             
+            # Time tracking for timeout management
+            import time
+            start_time = time.time()
+            TIMEOUT_SECONDS = 720  # 12 minutes (leave 1-2 minutes buffer before Vercel 800s limit)
+            
             # Process auction batches sequentially
             for batch_num, auction_batch in enumerate(auction_batches, 1):
+                # Check timeout before starting each batch
+                elapsed_time = time.time() - start_time
+                if elapsed_time > TIMEOUT_SECONDS:
+                    print(f"[{processing_id}] ⏰ Timeout approaching ({elapsed_time:.0f}s/{TIMEOUT_SECONDS}s) - stopping to avoid Vercel timeout")
+                    break
                 print(f"[{processing_id}] 🔄 === Processing Auction Batch {batch_num}/{len(auction_batches)} ({len(auction_batch)} auctions) ===")
                 
                 # Process each auction in the current batch
@@ -540,7 +551,8 @@ Auction text to extract from:
                     print(f"[{processing_id}] ⚠️ Token limit reached: {total_tokens_used}/{max_tokens} - stopping processing")
                     break
                     
-            print(f"[{processing_id}] 🎉 All auction batches completed - {processed_count}/{len(auctions)} auctions processed")
+            elapsed_time = time.time() - start_time
+            print(f"[{processing_id}] 🎉 Processing completed - {processed_count}/{len(auctions)} auctions processed in {elapsed_time:.0f}s")
             
             upload_results.append({
                 'status': 'processed',
