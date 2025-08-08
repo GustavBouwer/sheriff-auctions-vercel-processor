@@ -415,56 +415,56 @@ Auction text to extract from:
                             temperature=0.1
                         )
                     
-                    # Track token usage (matching process-complete.py)
-                    total_tokens_used += response.usage.total_tokens
+                        # Track token usage (matching process-complete.py)
+                        total_tokens_used += response.usage.total_tokens
                     
-                    # Parse OpenAI response
-                    content = response.choices[0].message.content.strip()
+                        # Parse OpenAI response
+                        content = response.choices[0].message.content.strip()
                     
-                    # Remove markdown code blocks if present
-                    if content.startswith('```json'):
-                        content = content[7:]  # Remove ```json
-                    elif content.startswith('```'):
-                        content = content[3:]  # Remove ```
+                        # Remove markdown code blocks if present
+                        if content.startswith('```json'):
+                            content = content[7:]  # Remove ```json
+                        elif content.startswith('```'):
+                            content = content[3:]  # Remove ```
                     
-                    if content.endswith('```'):
-                        content = content[:-3]  # Remove trailing ```
+                        if content.endswith('```'):
+                            content = content[:-3]  # Remove trailing ```
                     
-                    content = content.strip()
+                        content = content.strip()
                     
-                    print(f"📋 OpenAI response for auction {i}: {content[:100]}...")
+                        print(f"📋 OpenAI response for auction {i}: {content[:100]}...")
                     
-                    if content.startswith('['):
-                        extracted_data = json.loads(content)
-                        if isinstance(extracted_data, list) and len(extracted_data) > 0:
-                            auction_data = extracted_data[0]  # Take first item from array
+                        if content.startswith('['):
+                            extracted_data = json.loads(content)
+                            if isinstance(extracted_data, list) and len(extracted_data) > 0:
+                                auction_data = extracted_data[0]  # Take first item from array
+                            else:
+                                raise ValueError("Empty array returned")
                         else:
-                            raise ValueError("Empty array returned")
-                    else:
-                        auction_data = json.loads(content)
+                            auction_data = json.loads(content)
                     
-                    # Add metadata (matching process-complete.py exactly)
-                    auction_data['gov_pdf_name'] = pdf_key  # Use gov_pdf_name instead of source_pdf
-                    auction_data['data_extraction_date'] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")  # timestamp format
-                    auction_data['pdf_file_name'] = pdf_key.split('/')[-1]
+                        # Add metadata (matching process-complete.py exactly)
+                        auction_data['gov_pdf_name'] = pdf_key  # Use gov_pdf_name instead of source_pdf
+                        auction_data['data_extraction_date'] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")  # timestamp format
+                        auction_data['pdf_file_name'] = pdf_key.split('/')[-1]
                     
-                    # Sheriff association logic using JSON mapping
-                    sheriff_uuid = get_sheriff_uuid(auction_data.get('sheriff_office'))
-                    auction_data['sheriff_uuid'] = sheriff_uuid
-                    auction_data['sheriff_associated'] = is_sheriff_associated(sheriff_uuid)
+                        # Sheriff association logic using JSON mapping
+                        sheriff_uuid = get_sheriff_uuid(auction_data.get('sheriff_office'))
+                        auction_data['sheriff_uuid'] = sheriff_uuid
+                        auction_data['sheriff_associated'] = is_sheriff_associated(sheriff_uuid)
                     
-                    auction_data['auction_description'] = auction
-                    # Set default values for other boolean fields
-                    auction_data['processed_nearby_sales'] = False
-                    auction_data['online_auction'] = False
-                    auction_data['is_streaming'] = False
+                        auction_data['auction_description'] = auction
+                        # Set default values for other boolean fields
+                        auction_data['processed_nearby_sales'] = False
+                        auction_data['online_auction'] = False
+                        auction_data['is_streaming'] = False
                     
-                    # Geocode addresses (based on your original process)
-                    google_api_key = os.getenv('GOOGLE_MAPS_API_KEY')
-                    if google_api_key:
-                        # Sheriff address geocoding
-                        if auction_data.get('sheriff_address'):
-                            try:
+                        # Geocode addresses (based on your original process)
+                        google_api_key = os.getenv('GOOGLE_MAPS_API_KEY')
+                        if google_api_key:
+                            # Sheriff address geocoding
+                            if auction_data.get('sheriff_address'):
+                                try:
                                 sheriff_geocode = extract_area_components(auction_data['sheriff_address'], google_api_key)
                                 auction_data['sheriff_area'] = sheriff_geocode.get('area')
                                 auction_data['sheriff_city'] = sheriff_geocode.get('city')
@@ -498,21 +498,21 @@ Auction text to extract from:
                                 auction_data['house_province'] = None
                                 auction_data['house_coordinates'] = None
                     
-                    # Add auction_number for display (but remove before upload)
-                    auction_data['auction_number'] = i
+                        # Add auction_number for display (but remove before upload)
+                        auction_data['auction_number'] = i
                     
-                    print(f"📤 Uploading auction {i} to Supabase database...")
+                        print(f"📤 Uploading auction {i} to Supabase database...")
                     
-                    # Upload to Supabase auctions table
-                    supabase_url = os.getenv('SUPABASE_URL')
-                    supabase_key = os.getenv('SUPABASE_KEY')
+                        # Upload to Supabase auctions table
+                        supabase_url = os.getenv('SUPABASE_URL')
+                        supabase_key = os.getenv('SUPABASE_KEY')
                     
-                    headers = {
+                        headers = {
                         'apikey': supabase_key,
                         'Authorization': f'Bearer {supabase_key}',
                         'Content-Type': 'application/json',
                         'Prefer': 'return=minimal'
-                    }
+                        }
                     
                         # Remove auction_number if exists
                         upload_data = auction_data.copy()
