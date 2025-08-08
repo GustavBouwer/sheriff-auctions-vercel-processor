@@ -83,6 +83,8 @@ class handler(BaseHTTPRequestHandler):
             
             # Get PDF files to process from webhook
             pdf_files = webhook_data.get('pdf_files', [])
+            batch_info = webhook_data.get('batch_info', {})
+            
             if not pdf_files:
                 self.send_response(400)
                 self.send_header('Content-Type', 'application/json')
@@ -90,25 +92,61 @@ class handler(BaseHTTPRequestHandler):
                 self.wfile.write(json.dumps({'error': 'No PDF files provided'}).encode())
                 return
             
+            # Log batch information if available
+            if batch_info:
+                print(f"📦 Processing batch {batch_info.get('batch_number', 'unknown')}/{batch_info.get('total_batches', 'unknown')} - {len(pdf_files)} PDFs")
+            else:
+                print(f"📦 Processing {len(pdf_files)} PDFs (no batch info)")
+            
+            print(f"📁 PDF files to process: {pdf_files}")
+            print(f"🕐 Webhook received at: {webhook_data.get('timestamp', 'unknown')}")
+            
             # Process each PDF file
             results = []
             
-            for pdf_file in pdf_files:
+            for i, pdf_file in enumerate(pdf_files, 1):
+                print(f"\n🔄 === Processing PDF {i}/{len(pdf_files)}: {pdf_file} ===")
                 pdf_key = f"unprocessed/{pdf_file}"
                 result = process_single_pdf(pdf_key)
                 results.append(result)
                 
+                if result.get('status') == 'success':
+                    print(f"✅ PDF {i} processed successfully")
+                else:
+                    print(f"❌ PDF {i} processing failed: {result.get('error', 'unknown error')}")
+                
                 # Upload to Supabase storage and cleanup R2 if successful
                 if result.get('status') == 'success':
-                    upload_and_cleanup_pdf(pdf_file, result)
+                    print(f"📤 Uploading {pdf_file} to Supabase storage and cleaning up R2...")
+                    storage_result = upload_and_cleanup_pdf(pdf_file, result)
+                    result['storage_cleanup'] = storage_result
+                    
+                    if storage_result.get('success'):
+                        print(f"✅ Storage and cleanup completed for {pdf_file}")
+                    else:
+                        print(f"❌ Storage or cleanup failed for {pdf_file}: {storage_result.get('error', 'unknown')}")
+                else:
+                    print(f"⏭️ Skipping storage cleanup for {pdf_file} due to processing failure")
             
             # Send response
+            successful_processes = len([r for r in results if r.get('status') == 'success'])
+            
             response = {
                 'status': 'success',
                 'timestamp': datetime.now().isoformat(),
                 'pdfs_processed': len(pdf_files),
-                'results': results
+                'successful_processes': successful_processes,
+                'failed_processes': len(pdf_files) - successful_processes,
+                'batch_info': batch_info if batch_info else None,
+                'results': results,
+                'processing_method': 'webhook-triggered-batch' if batch_info else 'webhook-triggered-single'
             }
+            
+            print(f"\n📨 === WEBHOOK PROCESSING COMPLETE ===")
+            print(f"   Total PDFs: {len(pdf_files)}")
+            print(f"   Successful: {successful_processes}")
+            print(f"   Failed: {len(pdf_files) - successful_processes}")
+            print(f"   Batch: {batch_info.get('batch_number', 'N/A') if batch_info else 'Single'}")
             
             self.send_response(200)
             self.send_header('Content-Type', 'application/json')
@@ -116,9 +154,14 @@ class handler(BaseHTTPRequestHandler):
             self.wfile.write(json.dumps(response, indent=2).encode())
             
         except Exception as e:
+            print(f"❌ WEBHOOK ERROR: {str(e)}")
+            import traceback
+            print(f"   Traceback: {traceback.format_exc()}")
+            
             error_response = {
                 'status': 'error',
                 'error': str(e),
+                'error_type': type(e).__name__,
                 'timestamp': datetime.now().isoformat()
             }
             
@@ -130,7 +173,10 @@ class handler(BaseHTTPRequestHandler):
 def process_single_pdf(pdf_key):
     """Process a single PDF file (same logic as process-complete but for one PDF)"""
     try:
+        print(f"🔄 Starting processing for PDF: {pdf_key}")
+        
         # Initialize clients
+        print(f"📡 Initializing R2 client...")
         r2_client = boto3.client(
             's3',
             endpoint_url=os.getenv('R2_ENDPOINT_URL'),
@@ -139,25 +185,52 @@ def process_single_pdf(pdf_key):
             region_name='auto'
         )
         
+        print(f"🤖 Initializing OpenAI client...")
         openai_client = OpenAI(api_key=os.getenv('OPENAI_API_KEY'))
         google_api_key = os.getenv('GOOGLE_MAPS_API_KEY')
         bucket_name = os.getenv('R2_BUCKET_NAME', 'sheriff-auction-pdfs')
         
-        # Download and extract text from PDF
-        pdf_obj = r2_client.get_object(Bucket=bucket_name, Key=pdf_key)
-        pdf_content = pdf_obj['Body'].read()
-        pdf_stream = BytesIO(pdf_content)
+        print(f"📦 Using R2 bucket: {bucket_name}")
         
+        # Download and extract text from PDF
+        print(f"📈 Attempting to download PDF from R2: {pdf_key}")
+        try:
+            pdf_obj = r2_client.get_object(Bucket=bucket_name, Key=pdf_key)
+            pdf_content = pdf_obj['Body'].read()
+            pdf_size = len(pdf_content)
+            print(f"✅ Successfully downloaded PDF: {pdf_size} bytes")
+            
+            pdf_stream = BytesIO(pdf_content)
+        except Exception as e:
+            print(f"❌ Failed to download PDF from R2: {str(e)}")
+            # List what's available in unprocessed folder
+            try:
+                list_result = r2_client.list_objects_v2(Bucket=bucket_name, Prefix='unprocessed/', MaxKeys=10)
+                available_files = [obj['Key'] for obj in list_result.get('Contents', [])]
+                print(f"📁 Available files in unprocessed/: {available_files}")
+            except Exception as list_error:
+                print(f"❌ Cannot list R2 bucket contents: {str(list_error)}")
+            raise e
+        
+        # Extract text from PDF
+        print(f"📄 Extracting text from PDF...")
         raw_text = ""
         with pdfplumber.open(pdf_stream) as pdf:
-            start_page = 12 if len(pdf.pages) > 12 else 0
+            total_pages = len(pdf.pages)
+            start_page = 12 if total_pages > 12 else 0
+            print(f"📃 PDF has {total_pages} pages, starting from page {start_page + 1}")
             
+            pages_processed = 0
             for i, page in enumerate(pdf.pages[start_page:], start=start_page + 1):
                 page_text = page.extract_text()
                 if page_text:
                     if "PAUC" in page_text.upper():
+                        print(f"⏹️ Found PAUC section on page {i}, stopping extraction")
                         break
                     raw_text += f"{page_text}\n"
+                    pages_processed += 1
+            
+            print(f"✅ Processed {pages_processed} pages, extracted {len(raw_text)} characters")
         
         # Clean and split text (same logic as process-complete)
         def clean_text(text):
@@ -191,41 +264,84 @@ def process_single_pdf(pdf_key):
                     auctions.append(auction_content.strip())
                 return [auction for auction in auctions if auction]
         
+        print(f"🧽 Cleaning extracted text...")
         cleaned_text = clean_text(raw_text)
+        print(f"✅ Text cleaned: {len(cleaned_text)} characters after cleaning")
+        
+        print(f"✂️ Splitting text into individual auctions...")
         auctions = split_into_auctions(cleaned_text)
+        print(f"📄 Found {len(auctions)} auctions in PDF")
         
         # For webhook processing, limit to 3 auctions for testing
+        original_count = len(auctions)
         auctions = auctions[:3]
+        if original_count > 3:
+            print(f"⚠️ Limited to first 3 auctions for webhook processing (found {original_count} total)")
         
-        # Process auctions with OpenAI (same logic but streamlined)
+        # Show first few characters of each auction for debugging
+        for i, auction in enumerate(auctions, 1):
+            preview = auction[:100].replace('\n', ' ').strip()
+            print(f"📜 Auction {i}: {preview}...")
+        
+        # Process auctions with OpenAI
+        print(f"🤖 Processing {len(auctions)} auctions with OpenAI...")
+        
         processed_count = 0
         upload_results = []
         
-        # For webhook processing, we'll do basic processing and return results
-        # The full processing logic would be implemented here similar to process-complete.py
-        # For now, return success with basic info
+        enable_processing = os.getenv('ENABLE_PROCESSING', 'false').lower() == 'true'
         
-        processed_count = len(auctions)
-        upload_results.append({
-            'status': 'processed',
-            'auctions_found': len(auctions),
-            'auctions_extracted': processed_count,
-            'note': 'Webhook processing completed - implement full processing logic here'
-        })
+        if not enable_processing:
+            print(f"⚠️ ENABLE_PROCESSING is false - skipping OpenAI processing")
+            upload_results.append({
+                'status': 'skipped',
+                'auctions_found': len(auctions),
+                'auctions_extracted': 0,
+                'note': 'OpenAI processing disabled (ENABLE_PROCESSING=false)'
+            })
+        else:
+            print(f"✅ ENABLE_PROCESSING is true - proceeding with OpenAI processing")
+            # TODO: Implement full OpenAI processing logic here
+            processed_count = len(auctions)
+            upload_results.append({
+                'status': 'processed',
+                'auctions_found': len(auctions),
+                'auctions_extracted': processed_count,
+                'note': 'Basic processing completed - full OpenAI logic needed'
+            })
         
-        return {
+        result = {
             'status': 'success',
             'pdf_key': pdf_key,
+            'pdf_size_bytes': pdf_size,
+            'pages_in_pdf': total_pages,
+            'pages_processed': pages_processed,
+            'raw_text_length': len(raw_text),
+            'cleaned_text_length': len(cleaned_text),
             'auctions_found': len(auctions),
             'auctions_processed': processed_count,
-            'upload_results': upload_results
+            'upload_results': upload_results,
+            'processing_enabled': enable_processing
         }
         
+        print(f"✅ Processing completed successfully:")
+        print(f"   - PDF: {pdf_size} bytes, {total_pages} pages")
+        print(f"   - Text: {len(raw_text)} -> {len(cleaned_text)} chars")
+        print(f"   - Auctions: {len(auctions)} found, {processed_count} processed")
+        
+        return result
+        
     except Exception as e:
+        print(f"❌ ERROR processing PDF {pdf_key}: {str(e)}")
+        print(f"   Error type: {type(e).__name__}")
+        import traceback
+        print(f"   Traceback: {traceback.format_exc()}")
+        
         return {
             'status': 'error',
             'pdf_key': pdf_key,
-            'error': str(e)
+            'error': str(e),
+            'error_type': type(e).__name__
         }
 
 def upload_and_cleanup_pdf(pdf_filename, processing_result):

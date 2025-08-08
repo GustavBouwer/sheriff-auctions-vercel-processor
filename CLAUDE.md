@@ -347,15 +347,17 @@ vercel --prod
 └─────────────────────────┘                   └─────────────────────────┘
 ```
 
-#### **Enhanced Communication Flow with Smart Storage**
+#### **Enhanced Communication Flow with SAFLII HTML Processing**
 1. **Cloudflare Worker** (`pdf-checker`) runs every 5 minutes (cron job)
-2. **Discovers new PDFs** on SAFLII and downloads to R2 `unprocessed/` folder
-3. **Sends webhook** to Vercel: `POST /api/webhook-process`
-4. **Vercel receives webhook**, processes PDFs (3 auctions max during testing)
-5. **Extracts auction data** with OpenAI and uploads to Supabase database
-6. **Uploads PDF to Supabase storage** (sa-auction-pdf-processed bucket) with metadata
-7. **Deletes PDF from R2 unprocessed/** folder (saves storage costs)
-8. **KV store tracking** prevents re-downloading same PDFs
+2. **Discovers Legal Notice B HTML pages** on SAFLII main page
+3. **Requests HTML pages and waits 15 seconds** for SAFLII processing (critical fix)
+4. **SAFLII serves PDF content from HTML pages** (not direct PDF URLs)
+5. **Downloads PDFs to R2 unprocessed/** folder and marks as seen in KV store
+6. **Sends webhook** to Vercel: `POST /api/webhook-process`
+7. **Vercel receives webhook**, processes PDFs (3 auctions max during testing)
+8. **Extracts auction data** with OpenAI and uploads to Supabase database
+9. **Uploads PDF to Supabase storage** (sa-auction-pdf-processed bucket) with metadata
+10. **Deletes PDF from R2 unprocessed/** folder (saves storage costs)
 
 #### **Webhook Payload Format**
 ```json
@@ -424,6 +426,18 @@ ENABLE_PROCESSING=true  # Enable for production
 
 ## 🆘 **Troubleshooting**
 
+### **🔥 CRITICAL: SAFLII HTML Processing Issue (August 2025)**
+
+**Problem**: System stopped working, no new PDFs being discovered
+**Root Cause**: SAFLII serves PDF content FROM HTML pages after processing, not from direct PDF URLs
+**Solution Applied**: 
+- ✅ Cloudflare Worker now requests HTML pages (not PDF URLs)
+- ✅ Waits 15 seconds for SAFLII HTML-to-PDF processing
+- ✅ SAFLII serves PDF content from HTML endpoints
+- ✅ Mimics browser behavior: Click HTML → Wait → Get PDF
+
+**Key Understanding**: SAFLII URLs like `989.html` take 5-15 seconds to process before serving PDF content
+
 ### **Common Issues**
 
 **PDF Not Processing**
@@ -431,6 +445,13 @@ ENABLE_PROCESSING=true  # Enable for production
 - Verify PDF exists in R2 `unprocessed/` folder
 - Check Vercel function logs
 - Ensure API keys are valid
+- **NEW**: Check if Cloudflare Worker is properly requesting HTML pages (not PDF URLs)
+
+**No New PDFs Discovered**
+- **FIRST CHECK**: Verify Cloudflare Worker is using HTML URLs, not PDF URLs
+- Check SAFLII page structure hasn't changed
+- Verify Legal Notice B filtering logic
+- Ensure 15-second processing delay is configured
 
 **High OpenAI Costs**
 - Reduce `MAX_AUCTIONS_PER_RUN`
