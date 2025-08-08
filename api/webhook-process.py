@@ -308,8 +308,10 @@ def process_single_pdf(pdf_key):
         else:
             print(f"✅ ENABLE_PROCESSING is true - proceeding with OpenAI processing")
             
-            # Initialize processed count
+            # Initialize processed count and token tracking
             processed_count = 0
+            total_tokens_used = 0
+            max_tokens = int(os.getenv('MAX_OPENAI_TOKENS_PER_RUN', '100000'))
             
             # Process each auction with OpenAI
             for i, auction in enumerate(auctions, 1):
@@ -388,6 +390,9 @@ Auction text to extract from:
                         temperature=0.1
                     )
                     
+                    # Track token usage (matching process-complete.py)
+                    total_tokens_used += response.usage.total_tokens
+                    
                     # Parse OpenAI response
                     content = response.choices[0].message.content.strip()
                     
@@ -413,20 +418,63 @@ Auction text to extract from:
                     else:
                         auction_data = json.loads(content)
                     
-                    # Add metadata
-                    auction_data['gov_pdf_name'] = pdf_key
-                    auction_data['data_extraction_date'] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                    # Add metadata (matching process-complete.py exactly)
+                    auction_data['gov_pdf_name'] = pdf_key  # Use gov_pdf_name instead of source_pdf
+                    auction_data['data_extraction_date'] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")  # timestamp format
                     auction_data['pdf_file_name'] = pdf_key.split('/')[-1]
                     
-                    # Sheriff association
+                    # Sheriff association logic using JSON mapping
                     sheriff_uuid = get_sheriff_uuid(auction_data.get('sheriff_office'))
                     auction_data['sheriff_uuid'] = sheriff_uuid
                     auction_data['sheriff_associated'] = is_sheriff_associated(sheriff_uuid)
                     
                     auction_data['auction_description'] = auction
+                    # Set default values for other boolean fields
                     auction_data['processed_nearby_sales'] = False
                     auction_data['online_auction'] = False
                     auction_data['is_streaming'] = False
+                    
+                    # Geocode addresses (based on your original process)
+                    google_api_key = os.getenv('GOOGLE_MAPS_API_KEY')
+                    if google_api_key:
+                        # Sheriff address geocoding
+                        if auction_data.get('sheriff_address'):
+                            try:
+                                sheriff_geocode = extract_area_components(auction_data['sheriff_address'], google_api_key)
+                                auction_data['sheriff_area'] = sheriff_geocode.get('area')
+                                auction_data['sheriff_city'] = sheriff_geocode.get('city')
+                                auction_data['sheriff_province'] = sheriff_geocode.get('province')
+                                auction_data['sheriff_coordinates'] = sheriff_geocode.get('coordinates')
+                            except Exception as e:
+                                print(f"Sheriff geocoding error: {e}")
+                                auction_data['sheriff_area'] = None
+                                auction_data['sheriff_city'] = None
+                                auction_data['sheriff_province'] = None
+                                auction_data['sheriff_coordinates'] = None
+                        
+                        # House address geocoding
+                        if auction_data.get('street_address'):
+                            try:
+                                house_geocode = extract_area_components(auction_data['street_address'], google_api_key)
+                                auction_data['house_street_number'] = house_geocode.get('street_number')
+                                auction_data['house_street_name'] = house_geocode.get('street_name')
+                                auction_data['house_suburb'] = house_geocode.get('suburb')
+                                auction_data['house_area'] = house_geocode.get('area')
+                                auction_data['house_city'] = house_geocode.get('city')
+                                auction_data['house_province'] = house_geocode.get('province')
+                                auction_data['house_coordinates'] = house_geocode.get('coordinates')
+                            except Exception as e:
+                                print(f"House geocoding error: {e}")
+                                auction_data['house_street_number'] = None
+                                auction_data['house_street_name'] = None
+                                auction_data['house_suburb'] = None
+                                auction_data['house_area'] = None
+                                auction_data['house_city'] = None
+                                auction_data['house_province'] = None
+                                auction_data['house_coordinates'] = None
+                    
+                    # Add auction_number for display (but remove before upload)
+                    auction_data['auction_number'] = i
                     
                     print(f"📤 Uploading auction {i} to Supabase database...")
                     
@@ -453,6 +501,11 @@ Auction text to extract from:
                         processed_count += 1
                     else:
                         print(f"❌ Auction {i} upload failed: {upload_response.status_code} - {upload_response.text}")
+                    
+                    # Check token limits (matching process-complete.py)
+                    if total_tokens_used > max_tokens:
+                        print(f"Token limit reached: {total_tokens_used}/{max_tokens}")
+                        break
                         
                 except Exception as e:
                     print(f"❌ Auction {i} processing failed: {str(e)}")
@@ -477,13 +530,17 @@ Auction text to extract from:
             'auctions_found': len(auctions),
             'auctions_processed': processed_count,
             'upload_results': upload_results,
-            'processing_enabled': enable_processing
+            'processing_enabled': enable_processing,
+            'total_tokens_used': total_tokens_used if enable_processing else 0,
+            'estimated_cost': f"${total_tokens_used * 0.000002:.4f}" if enable_processing else "$0.0000"
         }
         
         print(f"✅ Processing completed successfully:")
         print(f"   - PDF: {pdf_size} bytes, {total_pages} pages")
         print(f"   - Text: {len(raw_text)} -> {len(cleaned_text)} chars")
         print(f"   - Auctions: {len(auctions)} found, {processed_count} processed")
+        if enable_processing:
+            print(f"   - Tokens: {total_tokens_used} used, cost ${total_tokens_used * 0.000002:.4f}")
         
         return result
         
