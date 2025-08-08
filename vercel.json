@@ -1,0 +1,18 @@
+{
+  "functions": {
+    "api/webhook-process.py": {
+      "maxDuration": 1800
+    },
+    "api/process-complete.py": {
+      "maxDuration": 1800
+    },
+    "api/process-manual.py": {
+      "maxDuration": 1800
+    }
+  },
+  "build": {
+    "env": {
+      "PYTHONPATH": "."
+    }
+  }
+}

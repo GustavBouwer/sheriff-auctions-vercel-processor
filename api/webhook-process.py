@@ -4,6 +4,7 @@ Supports queuing to handle multiple PDFs uploaded simultaneously
 """
 
 import json
+import logging
 import os
 import re
 import sys
@@ -15,6 +16,10 @@ import pdfplumber
 from openai import OpenAI
 import requests
 import traceback
+
+# Configure httpx to only log actual errors, not successful requests
+logging.getLogger("httpx").setLevel(logging.WARNING)
+logging.getLogger("openai").setLevel(logging.WARNING)
 
 # Add utils directory to path for imports
 sys.path.append(os.path.join(os.path.dirname(__file__), '..', 'utils'))
@@ -102,32 +107,44 @@ class handler(BaseHTTPRequestHandler):
             print(f"📁 PDF files to process: {pdf_files}")
             print(f"🕐 Webhook received at: {webhook_data.get('timestamp', 'unknown')}")
             
-            # Process each PDF file
+            # Generate unique processing ID for log isolation
+            processing_id = f"{datetime.now().strftime('%H%M%S')}_{len(pdf_files)}PDFs"
+            print(f"🏷️ Processing ID: {processing_id}")
+            print(f"⏱️ Sequential processing {len(pdf_files)} PDFs (no collisions)")
+            
+            # Process each PDF file SEQUENTIALLY to avoid collisions
             results = []
             
             for i, pdf_file in enumerate(pdf_files, 1):
-                print(f"\n🔄 === Processing PDF {i}/{len(pdf_files)}: {pdf_file} ===")
+                print(f"\n[{processing_id}] 🔄 === Processing PDF {i}/{len(pdf_files)}: {pdf_file} ===")
                 pdf_key = f"unprocessed/{pdf_file}"
-                result = process_single_pdf(pdf_key)
+                
+                # Process single PDF completely before moving to next
+                print(f"[{processing_id}] 📥 Starting processing for {pdf_file}")
+                result = process_single_pdf(pdf_key, processing_id)
                 results.append(result)
                 
                 if result.get('status') == 'success':
-                    print(f"✅ PDF {i} processed successfully")
+                    print(f"[{processing_id}] ✅ PDF {i} processed successfully - {result.get('auctions_processed', 0)} auctions")
                 else:
-                    print(f"❌ PDF {i} processing failed: {result.get('error', 'unknown error')}")
+                    print(f"[{processing_id}] ❌ PDF {i} processing failed: {result.get('error', 'unknown error')}")
                 
                 # Upload to Supabase storage and cleanup R2 if successful
                 if result.get('status') == 'success':
-                    print(f"📤 Uploading {pdf_file} to Supabase storage and cleaning up R2...")
+                    print(f"[{processing_id}] 📤 Uploading {pdf_file} to Supabase storage and cleaning up R2...")
                     storage_result = upload_and_cleanup_pdf(pdf_file, result)
                     result['storage_cleanup'] = storage_result
                     
                     if storage_result.get('success'):
-                        print(f"✅ Storage and cleanup completed for {pdf_file}")
+                        print(f"[{processing_id}] ✅ Storage and cleanup completed for {pdf_file}")
                     else:
-                        print(f"❌ Storage or cleanup failed for {pdf_file}: {storage_result.get('error', 'unknown')}")
+                        print(f"[{processing_id}] ❌ Storage or cleanup failed for {pdf_file}: {storage_result.get('error', 'unknown')}")
                 else:
-                    print(f"⏭️ Skipping storage cleanup for {pdf_file} due to processing failure")
+                    print(f"[{processing_id}] ⏭️ Skipping storage cleanup for {pdf_file} due to processing failure")
+                
+                print(f"[{processing_id}] 🏁 Completed PDF {i}/{len(pdf_files)}, moving to next...")
+                
+            print(f"[{processing_id}] 🎉 All PDFs processed sequentially!")
             
             # Send response
             successful_processes = len([r for r in results if r.get('status') == 'success'])
@@ -171,13 +188,13 @@ class handler(BaseHTTPRequestHandler):
             self.end_headers()
             self.wfile.write(json.dumps(error_response).encode())
 
-def process_single_pdf(pdf_key):
+def process_single_pdf(pdf_key, processing_id="unknown"):
     """Process a single PDF file (same logic as process-complete but for one PDF)"""
     try:
-        print(f"🔄 Starting processing for PDF: {pdf_key}")
+        print(f"[{processing_id}] 🔄 Starting processing for PDF: {pdf_key}")
         
         # Initialize clients
-        print(f"📡 Initializing R2 client...")
+        print(f"[{processing_id}] 📡 Initializing R2 client...")
         r2_client = boto3.client(
             's3',
             endpoint_url=os.getenv('R2_ENDPOINT_URL'),
@@ -186,15 +203,15 @@ def process_single_pdf(pdf_key):
             region_name='auto'
         )
         
-        print(f"🤖 Initializing OpenAI client...")
+        print(f"[{processing_id}] 🤖 Initializing OpenAI client...")
         openai_client = OpenAI(api_key=os.getenv('OPENAI_API_KEY'))
         google_api_key = os.getenv('GOOGLE_MAPS_API_KEY')
         bucket_name = os.getenv('R2_BUCKET_NAME', 'sheriff-auction-pdfs')
         
-        print(f"📦 Using R2 bucket: {bucket_name}")
+        print(f"[{processing_id}] 📦 Using R2 bucket: {bucket_name}")
         
         # Download and extract text from PDF
-        print(f"📈 Attempting to download PDF from R2: {pdf_key}")
+        print(f"[{processing_id}] 📈 Attempting to download PDF from R2: {pdf_key}")
         try:
             pdf_obj = r2_client.get_object(Bucket=bucket_name, Key=pdf_key)
             pdf_content = pdf_obj['Body'].read()
