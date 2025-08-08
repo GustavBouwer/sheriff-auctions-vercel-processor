@@ -168,8 +168,8 @@ else:
 
 | Endpoint | Status | Description |
 |----------|--------|-------------|
+| `/api/webhook-process` | ✅ **PRODUCTION** | **Sequential webhook processing with 30min timeout** |
 | `/api/process-complete` | ✅ **PRODUCTION** | **Complete ETL pipeline with Supabase storage** |
-| `/api/webhook-process` | ✅ **WEBHOOK** | **Cloudflare Worker notification with smart storage** |
 | `/api/process-manual` | ✅ Live | Manual PDF processing (single or batch) |
 | `/api/monitor` | ✅ **DASHBOARD** | **Comprehensive system health monitoring** |
 | `/api/storage-monitor` | ✅ Live | Supabase storage bucket monitoring |
@@ -268,10 +268,11 @@ curl -X POST "https://your-app.vercel.app/api/process?max_pdfs=1"
 
 ### **Recently Fixed Components** ✅
 1. **SAFLII PDF Discovery**: Fixed URL conversion from .html to .pdf for direct downloads
-2. **Webhook Processing**: Implemented real OpenAI processing (was placeholder before)
-3. **Comprehensive Logging**: Added detailed logging throughout webhook processing pipeline
-4. **R2 Consistency**: Added 2-second delay after PDF upload before webhook notification
-5. **Queued Webhooks**: Batches of 3 PDFs with 10-second delays between batches
+2. **Sequential Processing**: Implemented collision-free processing with unique processing IDs
+3. **Complete Feature Parity**: Full 33+ field extraction with geocoding and sheriff association
+4. **Extended Timeouts**: 30-minute Vercel timeout supports 200+ auction batches
+5. **Clean Analytics**: Fixed httpx logging to prevent false error reports
+6. **Multi-Auction Support**: Fixed regex to handle letter-prefixed case numbers (D5071/2024)
 
 ### **Successfully Tested Components** ✅
 1. **PDF Download from R2**: test-989.pdf (2.38MB, 180 pages) and 2025-176.pdf
@@ -286,12 +287,14 @@ curl -X POST "https://your-app.vercel.app/api/process?max_pdfs=1"
    - Property improvements and zoning
 
 ### **Known Issues Resolved** ✅
+- **Function Collisions**: Sequential processing prevents PDFs from interrupting each other
+- **Log Collision**: Unique processing IDs isolate logs for clean analytics
+- **Timeout Issues**: 30-minute limit handles large 200+ auction batches
+- **Field Extraction**: Complete 33+ field extraction with geocoding and sheriff mapping
 - **SAFLII URL Processing**: Fixed to use direct .pdf URLs instead of HTML processing
-- **OpenAI Processing**: Implemented actual GPT processing instead of placeholder responses
-- **File Upload Errors**: Enhanced logging to track correct PDF filenames through processing
-- **OpenAI/httpx compatibility**: Fixed with openai==1.55.3 + httpx==0.27.2
-- **R2 credentials**: Requires R2-specific API tokens (32 chars)
-- **PDF memory handling**: Using BytesIO for pdfplumber
+- **False Error Analytics**: httpx success logs no longer appear as errors in Vercel
+- **Multi-Auction Detection**: Fixed regex to find all auctions including letter prefixes
+- **OpenAI Processing**: Full production-grade processing with token tracking and cost control
 
 ## 💡 **Development Notes**
 
@@ -358,17 +361,19 @@ vercel --prod
 └─────────────────────────┘                   └─────────────────────────┘
 ```
 
-#### **Enhanced Communication Flow with Direct PDF Processing**
+#### **Enhanced Communication Flow with Sequential PDF Processing**
 1. **Cloudflare Worker** (`pdf-checker`) runs every 5 minutes (cron job)
 2. **Discovers Legal Notice B HTML pages** on SAFLII main page
 3. **Converts .html URLs to .pdf URLs** for direct PDF download (critical fix)
 4. **SAFLII serves PDF content directly** from .pdf URLs (no HTML processing needed)
 5. **Downloads PDFs to R2 unprocessed/** folder and marks as seen in KV store
 6. **Waits 2 seconds for R2 consistency**, then sends queued webhooks to Vercel
-7. **Vercel receives webhook batches**, processes PDFs with comprehensive logging
-8. **Extracts auction data** with OpenAI (real processing, not placeholder) and uploads to Supabase database
-9. **Uploads PDF to Supabase storage** (sa-auction-pdf-processed bucket) with metadata
-10. **Deletes PDF from R2 unprocessed/** folder (saves storage costs)
+7. **Vercel receives webhook batches**, assigns unique processing ID for log isolation
+8. **Processes PDFs sequentially** (one at a time) to prevent function collisions
+9. **Extracts auction data** with complete 33+ field extraction and geocoding
+10. **Uploads PDF to Supabase storage** (sa-auction-pdf-processed bucket) with metadata
+11. **Deletes PDF from R2 unprocessed/** folder (saves storage costs)
+12. **Completes all PDFs in batch** before webhook returns success
 
 #### **Webhook Payload Format**
 ```json
@@ -519,8 +524,8 @@ ENABLE_PROCESSING=true  # Enable for production
 
 *This service is a critical component of the Sheriff Auctions data pipeline, providing robust PDF processing capabilities that complement the Cloudflare Workers' PDF discovery and download functionality.*
 
-**Status**: ✅ **PRODUCTION OPERATIONAL** - Complete ETL Pipeline with Smart Storage
-*Last Updated: August 7, 2025*
+**Status**: ✅ **PRODUCTION OPERATIONAL** - Sequential Processing with 30min Timeout  
+*Last Updated: August 8, 2025*
 
 ---
 
