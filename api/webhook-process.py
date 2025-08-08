@@ -278,11 +278,8 @@ def process_single_pdf(pdf_key):
         auctions = split_into_auctions(cleaned_text)
         print(f"📄 Found {len(auctions)} auctions in PDF")
         
-        # For webhook processing, limit to 3 auctions for testing
-        original_count = len(auctions)
-        auctions = auctions[:3]
-        if original_count > 3:
-            print(f"⚠️ Limited to first 3 auctions for webhook processing (found {original_count} total)")
+        # Process all auctions found (no artificial limits)
+        print(f"📋 Processing all {len(auctions)} auctions found in PDF")
         
         # Show first few characters of each auction for debugging
         for i, auction in enumerate(auctions, 1):
