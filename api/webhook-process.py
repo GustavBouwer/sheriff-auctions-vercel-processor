@@ -343,49 +343,49 @@ def process_single_pdf(pdf_key, processing_id="unknown"):
                     print(f"[{processing_id}] 🤖 Processing auction {global_auction_num}/{len(auctions)} (Batch {batch_num}, Item {i}/{len(auction_batch)}) with OpenAI...")
                     
                     try:
-                    # Complete fine-tuned auction fields specification (from process-complete.py)
-                    auction_fields = [
-                        {"column_name": "case_number", "data_type": "text", "allow_null": False, "additional_info": "The official case number for the auction, typically in the format '1234/2024'."},
-                        {"column_name": "court_name", "data_type": "text", "allow_null": True, "additional_info": "The name of the court where the case is filed (e.g., 'Gauteng Division, Pretoria')."},
-                        {"column_name": "plaintiff", "data_type": "text", "allow_null": True, "additional_info": "Name of the plaintiff or applicant in the case."},
-                        {"column_name": "defendant", "data_type": "text", "allow_null": True, "additional_info": "Name(s) of the defendant(s) or respondent(s) in the case."},
-                        {"column_name": "auction_date", "data_type": "date", "allow_null": True, "additional_info": "The date on which the auction will be held (e.g., '2025-01-28')."},
-                        {"column_name": "auction_time", "data_type": "time without time zone", "allow_null": True, "additional_info": "The time when the auction is scheduled to start (e.g., '11:00')."},
-                        {"column_name": "sheriff_office", "data_type": "text", "allow_null": True, "additional_info": "Name of the sheriff's office conducting the auction. Exclude words like acting, sheriff, office, the high court, and just return the name. Return it as a proper Noun not all caps. This should be the name of the area, not the name of the sheriff"},
-                        {"column_name": "sheriff_address", "data_type": "text", "allow_null": True, "additional_info": "Physical address of the sheriff's office or auction venue."},
-                        {"column_name": "erf_number", "data_type": "text", "allow_null": True, "additional_info": "ERF number or property identifier related to the auctioned property."},
-                        {"column_name": "township", "data_type": "text", "allow_null": True, "additional_info": "The township or area where the property is located."},
-                        {"column_name": "extension", "data_type": "text", "allow_null": True, "additional_info": "Extension number or name, if applicable, for the property."},
-                        {"column_name": "registration_division", "data_type": "text", "allow_null": True, "additional_info": "Registration division for the property (e.g., 'IR', 'JR')."},
-                        {"column_name": "province", "data_type": "text", "allow_null": True, "additional_info": "Province where the property is located (e.g., 'Gauteng')."},
-                        {"column_name": "stand_size", "data_type": "bigint", "allow_null": True, "additional_info": "Size of the stand or property, usually in square meters."},
-                        {"column_name": "deed_of_transfer_number", "data_type": "text", "allow_null": True, "additional_info": "Official deed of transfer number for the property."},
-                        {"column_name": "street_address", "data_type": "text", "allow_null": True, "additional_info": "Physical street address of the property being auctioned. Be sure to not give the auctioneer's address, but the actual property address. Just give the street number, road name, suburb, and city if available, leave out things like what section it is and or what the door number is"},
-                        {"column_name": "zoning", "data_type": "text", "allow_null": True, "additional_info": "Classify the property zoning type (e.g., 'Residential', 'Commercial', 'Agricultural', 'Industrial' etc.)."},
-                        {"column_name": "reserve_price", "data_type": "bigint", "allow_null": True, "additional_info": "Minimum price required for the sale, remember that '.' indicates the cents seperator So R10.57 is 10,57 not 1057."},
-                        {"column_name": "bedrooms", "data_type": "bigint", "allow_null": True, "additional_info": "Number of bedrooms in the property."},
-                        {"column_name": "bathrooms", "data_type": "bigint", "allow_null": True, "additional_info": "Number of bathrooms in the property."},
-                        {"column_name": "kitchen", "data_type": "text", "allow_null": True, "additional_info": "Description of kitchen facilities (e.g., 'Yes', 'Scullery', 'Open plan')."},
-                        {"column_name": "scullery", "data_type": "text", "allow_null": True, "additional_info": "Presence or description of a scullery (e.g., 'Yes', 'No')."},
-                        {"column_name": "laundry", "data_type": "text", "allow_null": True, "additional_info": "Presence or description of a laundry (e.g., 'Yes', 'No')."},
-                        {"column_name": "living_areas", "data_type": "bigint", "allow_null": True, "additional_info": "Number of living areas (lounges, dining rooms, etc.)."},
-                        {"column_name": "garage", "data_type": "text", "allow_null": True, "additional_info": "Garage details (e.g., 'Single', 'Double', 'Yes', 'None')."},
-                        {"column_name": "carport", "data_type": "text", "allow_null": True, "additional_info": "Carport details (e.g., 'Single', 'Double', 'Yes', 'None')."},
-                        {"column_name": "other_structures", "data_type": "text", "allow_null": True, "additional_info": "Any additional structures on the property (e.g., 'Flatlet', 'Shed', 'Office')."},
-                        {"column_name": "registration_fee_required", "data_type": "text", "allow_null": True, "additional_info": "Amount and description of registration fee required to participate in the auction."},
-                        {"column_name": "fica_requirements", "data_type": "text", "allow_null": True, "additional_info": "FICA or legal compliance requirements for buyers."},
-                        {"column_name": "attorney", "data_type": "text", "allow_null": True, "additional_info": "Name of the attorney or firm representing the plaintiff."},
-                        {"column_name": "attorney_contact", "data_type": "text", "allow_null": True, "additional_info": "Contact details for the attorney (phone, fax, or email)."},
-                        {"column_name": "attorney_reference", "data_type": "text", "allow_null": True, "additional_info": "Attorney's internal reference number or code for the case."},
-                        {"column_name": "notice_date", "data_type": "date", "allow_null": True, "additional_info": "Date when the auction notice was published."},
-                        {"column_name": "additional_fees", "data_type": "text", "allow_null": True, "additional_info": "Explanation of any additional fees (e.g., 'attorney fees, sheriff fees, etc.')."},
-                        {"column_name": "total_estimated_cost", "data_type": "bigint", "allow_null": True, "additional_info": "Calculate Total estimated cost, including all fees and reserve price."},
-                        {"column_name": "currency", "data_type": "text", "allow_null": True, "additional_info": "Currency of all monetary values (e.g., 'ZAR')."},
-                        {"column_name": "conditions_of_sale", "data_type": "text", "allow_null": True, "additional_info": "Return the conditions of sale for the auction. It is usually a few lines of information following text like 'THE CONDITIONS OF SALE:' or 'Material conditions of sale:'. Give the full details of the structure including the sheriff's fees and deposit amount required from the purchaser. If nothing is found return 'See Auction Desription'"}
-                    ]
+                        # Complete fine-tuned auction fields specification (from process-complete.py)
+                        auction_fields = [
+                            {"column_name": "case_number", "data_type": "text", "allow_null": False, "additional_info": "The official case number for the auction, typically in the format '1234/2024'."},
+                            {"column_name": "court_name", "data_type": "text", "allow_null": True, "additional_info": "The name of the court where the case is filed (e.g., 'Gauteng Division, Pretoria')."},
+                            {"column_name": "plaintiff", "data_type": "text", "allow_null": True, "additional_info": "Name of the plaintiff or applicant in the case."},
+                            {"column_name": "defendant", "data_type": "text", "allow_null": True, "additional_info": "Name(s) of the defendant(s) or respondent(s) in the case."},
+                            {"column_name": "auction_date", "data_type": "date", "allow_null": True, "additional_info": "The date on which the auction will be held (e.g., '2025-01-28')."},
+                            {"column_name": "auction_time", "data_type": "time without time zone", "allow_null": True, "additional_info": "The time when the auction is scheduled to start (e.g., '11:00')."},
+                            {"column_name": "sheriff_office", "data_type": "text", "allow_null": True, "additional_info": "Name of the sheriff's office conducting the auction. Exclude words like acting, sheriff, office, the high court, and just return the name. Return it as a proper Noun not all caps. This should be the name of the area, not the name of the sheriff"},
+                            {"column_name": "sheriff_address", "data_type": "text", "allow_null": True, "additional_info": "Physical address of the sheriff's office or auction venue."},
+                            {"column_name": "erf_number", "data_type": "text", "allow_null": True, "additional_info": "ERF number or property identifier related to the auctioned property."},
+                            {"column_name": "township", "data_type": "text", "allow_null": True, "additional_info": "The township or area where the property is located."},
+                            {"column_name": "extension", "data_type": "text", "allow_null": True, "additional_info": "Extension number or name, if applicable, for the property."},
+                            {"column_name": "registration_division", "data_type": "text", "allow_null": True, "additional_info": "Registration division for the property (e.g., 'IR', 'JR')."},
+                            {"column_name": "province", "data_type": "text", "allow_null": True, "additional_info": "Province where the property is located (e.g., 'Gauteng')."},
+                            {"column_name": "stand_size", "data_type": "bigint", "allow_null": True, "additional_info": "Size of the stand or property, usually in square meters."},
+                            {"column_name": "deed_of_transfer_number", "data_type": "text", "allow_null": True, "additional_info": "Official deed of transfer number for the property."},
+                            {"column_name": "street_address", "data_type": "text", "allow_null": True, "additional_info": "Physical street address of the property being auctioned. Be sure to not give the auctioneer's address, but the actual property address. Just give the street number, road name, suburb, and city if available, leave out things like what section it is and or what the door number is"},
+                            {"column_name": "zoning", "data_type": "text", "allow_null": True, "additional_info": "Classify the property zoning type (e.g., 'Residential', 'Commercial', 'Agricultural', 'Industrial' etc.)."},
+                            {"column_name": "reserve_price", "data_type": "bigint", "allow_null": True, "additional_info": "Minimum price required for the sale, remember that '.' indicates the cents seperator So R10.57 is 10,57 not 1057."},
+                            {"column_name": "bedrooms", "data_type": "bigint", "allow_null": True, "additional_info": "Number of bedrooms in the property."},
+                            {"column_name": "bathrooms", "data_type": "bigint", "allow_null": True, "additional_info": "Number of bathrooms in the property."},
+                            {"column_name": "kitchen", "data_type": "text", "allow_null": True, "additional_info": "Description of kitchen facilities (e.g., 'Yes', 'Scullery', 'Open plan')."},
+                            {"column_name": "scullery", "data_type": "text", "allow_null": True, "additional_info": "Presence or description of a scullery (e.g., 'Yes', 'No')."},
+                            {"column_name": "laundry", "data_type": "text", "allow_null": True, "additional_info": "Presence or description of a laundry (e.g., 'Yes', 'No')."},
+                            {"column_name": "living_areas", "data_type": "bigint", "allow_null": True, "additional_info": "Number of living areas (lounges, dining rooms, etc.)."},
+                            {"column_name": "garage", "data_type": "text", "allow_null": True, "additional_info": "Garage details (e.g., 'Single', 'Double', 'Yes', 'None')."},
+                            {"column_name": "carport", "data_type": "text", "allow_null": True, "additional_info": "Carport details (e.g., 'Single', 'Double', 'Yes', 'None')."},
+                            {"column_name": "other_structures", "data_type": "text", "allow_null": True, "additional_info": "Any additional structures on the property (e.g., 'Flatlet', 'Shed', 'Office')."},
+                            {"column_name": "registration_fee_required", "data_type": "text", "allow_null": True, "additional_info": "Amount and description of registration fee required to participate in the auction."},
+                            {"column_name": "fica_requirements", "data_type": "text", "allow_null": True, "additional_info": "FICA or legal compliance requirements for buyers."},
+                            {"column_name": "attorney", "data_type": "text", "allow_null": True, "additional_info": "Name of the attorney or firm representing the plaintiff."},
+                            {"column_name": "attorney_contact", "data_type": "text", "allow_null": True, "additional_info": "Contact details for the attorney (phone, fax, or email)."},
+                            {"column_name": "attorney_reference", "data_type": "text", "allow_null": True, "additional_info": "Attorney's internal reference number or code for the case."},
+                            {"column_name": "notice_date", "data_type": "date", "allow_null": True, "additional_info": "Date when the auction notice was published."},
+                            {"column_name": "additional_fees", "data_type": "text", "allow_null": True, "additional_info": "Explanation of any additional fees (e.g., 'attorney fees, sheriff fees, etc.')."},
+                            {"column_name": "total_estimated_cost", "data_type": "bigint", "allow_null": True, "additional_info": "Calculate Total estimated cost, including all fees and reserve price."},
+                            {"column_name": "currency", "data_type": "text", "allow_null": True, "additional_info": "Currency of all monetary values (e.g., 'ZAR')."},
+                            {"column_name": "conditions_of_sale", "data_type": "text", "allow_null": True, "additional_info": "Return the conditions of sale for the auction. It is usually a few lines of information following text like 'THE CONDITIONS OF SALE:' or 'Material conditions of sale:'. Give the full details of the structure including the sheriff's fees and deposit amount required from the purchaser. If nothing is found return 'See Auction Desription'"}
+                        ]
                     
-                    # Create OpenAI prompt
-                    prompt = f"""You are a data extractor. From the following sheriff auction notice, extract the VALUES for these fields and return as a JSON array with ONE object.
+                        # Create OpenAI prompt
+                        prompt = f"""You are a data extractor. From the following sheriff auction notice, extract the VALUES for these fields and return as a JSON array with ONE object.
 
 Field specifications (extract the VALUES for each of these):
 {json.dumps(auction_fields, indent=2)}
@@ -404,16 +404,16 @@ Example format: [{{"case_number": "123/2024", "court_name": "Gauteng Division", 
 
 Auction text to extract from:
 {auction}"""
-                    
-                    response = openai_client.chat.completions.create(
-                        model="gpt-3.5-turbo",
-                        messages=[
-                            {"role": "system", "content": "You are a data extraction assistant. Return only valid JSON array."},
-                            {"role": "user", "content": prompt}
-                        ],
-                        max_tokens=1500,
-                        temperature=0.1
-                    )
+                        
+                        response = openai_client.chat.completions.create(
+                            model="gpt-3.5-turbo",
+                            messages=[
+                                {"role": "system", "content": "You are a data extraction assistant. Return only valid JSON array."},
+                                {"role": "user", "content": prompt}
+                            ],
+                            max_tokens=1500,
+                            temperature=0.1
+                        )
                     
                     # Track token usage (matching process-complete.py)
                     total_tokens_used += response.usage.total_tokens
