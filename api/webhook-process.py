@@ -327,11 +327,22 @@ def process_single_pdf(pdf_key, processing_id="unknown"):
             total_tokens_used = 0
             max_tokens = int(os.getenv('MAX_OPENAI_TOKENS_PER_RUN', '100000'))
             
-            # Process each auction with OpenAI
-            for i, auction in enumerate(auctions, 1):
-                print(f"🤖 Processing auction {i}/{len(auctions)} with OpenAI...")
+            # Batch auctions to stay within 15-minute Vercel limit
+            AUCTION_BATCH_SIZE = 50
+            auction_batches = [auctions[i:i + AUCTION_BATCH_SIZE] for i in range(0, len(auctions), AUCTION_BATCH_SIZE)]
+            
+            print(f"[{processing_id}] 📦 Processing {len(auctions)} auctions in {len(auction_batches)} batches of {AUCTION_BATCH_SIZE}")
+            
+            # Process auction batches sequentially
+            for batch_num, auction_batch in enumerate(auction_batches, 1):
+                print(f"[{processing_id}] 🔄 === Processing Auction Batch {batch_num}/{len(auction_batches)} ({len(auction_batch)} auctions) ===")
                 
-                try:
+                # Process each auction in the current batch
+                for i, auction in enumerate(auction_batch, 1):
+                    global_auction_num = (batch_num - 1) * AUCTION_BATCH_SIZE + i
+                    print(f"[{processing_id}] 🤖 Processing auction {global_auction_num}/{len(auctions)} (Batch {batch_num}, Item {i}/{len(auction_batch)}) with OpenAI...")
+                    
+                    try:
                     # Complete fine-tuned auction fields specification (from process-complete.py)
                     auction_fields = [
                         {"column_name": "case_number", "data_type": "text", "allow_null": False, "additional_info": "The official case number for the auction, typically in the format '1234/2024'."},
@@ -503,28 +514,33 @@ Auction text to extract from:
                         'Prefer': 'return=minimal'
                     }
                     
-                    # Remove auction_number if exists
-                    upload_data = auction_data.copy()
-                    upload_data.pop('auction_number', None)
-                    
-                    upload_url = f"{supabase_url}/rest/v1/auctions"
-                    upload_response = requests.post(upload_url, json=upload_data, headers=headers)
-                    
-                    if upload_response.status_code in [200, 201]:
-                        print(f"✅ Auction {i} uploaded successfully to Supabase")
-                        processed_count += 1
-                    else:
-                        print(f"❌ Auction {i} upload failed: {upload_response.status_code} - {upload_response.text}")
-                    
-                    # Check token limits (matching process-complete.py)
-                    if total_tokens_used > max_tokens:
-                        print(f"Token limit reached: {total_tokens_used}/{max_tokens}")
-                        break
+                        # Remove auction_number if exists
+                        upload_data = auction_data.copy()
+                        upload_data.pop('auction_number', None)
                         
-                except Exception as e:
-                    print(f"❌ Auction {i} processing failed: {str(e)}")
-                    print(f"   Traceback: {traceback.format_exc()}")
-                    continue
+                        upload_url = f"{supabase_url}/rest/v1/auctions"
+                        upload_response = requests.post(upload_url, json=upload_data, headers=headers)
+                        
+                        if upload_response.status_code in [200, 201]:
+                            print(f"[{processing_id}] ✅ Auction {global_auction_num} uploaded successfully to Supabase")
+                            processed_count += 1
+                        else:
+                            print(f"[{processing_id}] ❌ Auction {global_auction_num} upload failed: {upload_response.status_code} - {upload_response.text}")
+                        
+                    except Exception as e:
+                        print(f"[{processing_id}] ❌ Auction {global_auction_num} processing failed: {str(e)}")
+                        print(f"[{processing_id}]    Traceback: {traceback.format_exc()}")
+                        continue
+                
+                # Batch completion and token limit check
+                print(f"[{processing_id}] ✅ Batch {batch_num}/{len(auction_batches)} completed - {processed_count} auctions processed so far")
+                
+                # Check token limits between batches
+                if total_tokens_used > max_tokens:
+                    print(f"[{processing_id}] ⚠️ Token limit reached: {total_tokens_used}/{max_tokens} - stopping processing")
+                    break
+                    
+            print(f"[{processing_id}] 🎉 All auction batches completed - {processed_count}/{len(auctions)} auctions processed")
             
             upload_results.append({
                 'status': 'processed',

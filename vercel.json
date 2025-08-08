@@ -1,13 +1,13 @@
 {
   "functions": {
     "api/webhook-process.py": {
-      "maxDuration": 1800
+      "maxDuration": 900
     },
     "api/process-complete.py": {
-      "maxDuration": 1800
+      "maxDuration": 900
     },
     "api/process-manual.py": {
-      "maxDuration": 1800
+      "maxDuration": 900
     }
   },
   "build": {
