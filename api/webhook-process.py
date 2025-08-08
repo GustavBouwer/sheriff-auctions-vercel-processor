@@ -465,38 +465,38 @@ Auction text to extract from:
                             # Sheriff address geocoding
                             if auction_data.get('sheriff_address'):
                                 try:
-                                sheriff_geocode = extract_area_components(auction_data['sheriff_address'], google_api_key)
-                                auction_data['sheriff_area'] = sheriff_geocode.get('area')
-                                auction_data['sheriff_city'] = sheriff_geocode.get('city')
-                                auction_data['sheriff_province'] = sheriff_geocode.get('province')
-                                auction_data['sheriff_coordinates'] = sheriff_geocode.get('coordinates')
-                            except Exception as e:
-                                print(f"Sheriff geocoding error: {e}")
-                                auction_data['sheriff_area'] = None
-                                auction_data['sheriff_city'] = None
-                                auction_data['sheriff_province'] = None
-                                auction_data['sheriff_coordinates'] = None
+                                    sheriff_geocode = extract_area_components(auction_data['sheriff_address'], google_api_key)
+                                    auction_data['sheriff_area'] = sheriff_geocode.get('area')
+                                    auction_data['sheriff_city'] = sheriff_geocode.get('city')
+                                    auction_data['sheriff_province'] = sheriff_geocode.get('province')
+                                    auction_data['sheriff_coordinates'] = sheriff_geocode.get('coordinates')
+                                except Exception as e:
+                                    print(f"Sheriff geocoding error: {e}")
+                                    auction_data['sheriff_area'] = None
+                                    auction_data['sheriff_city'] = None
+                                    auction_data['sheriff_province'] = None
+                                    auction_data['sheriff_coordinates'] = None
                         
-                        # House address geocoding
-                        if auction_data.get('street_address'):
-                            try:
-                                house_geocode = extract_area_components(auction_data['street_address'], google_api_key)
-                                auction_data['house_street_number'] = house_geocode.get('street_number')
-                                auction_data['house_street_name'] = house_geocode.get('street_name')
-                                auction_data['house_suburb'] = house_geocode.get('suburb')
-                                auction_data['house_area'] = house_geocode.get('area')
-                                auction_data['house_city'] = house_geocode.get('city')
-                                auction_data['house_province'] = house_geocode.get('province')
-                                auction_data['house_coordinates'] = house_geocode.get('coordinates')
-                            except Exception as e:
-                                print(f"House geocoding error: {e}")
-                                auction_data['house_street_number'] = None
-                                auction_data['house_street_name'] = None
-                                auction_data['house_suburb'] = None
-                                auction_data['house_area'] = None
-                                auction_data['house_city'] = None
-                                auction_data['house_province'] = None
-                                auction_data['house_coordinates'] = None
+                            # House address geocoding
+                            if auction_data.get('street_address'):
+                                try:
+                                    house_geocode = extract_area_components(auction_data['street_address'], google_api_key)
+                                    auction_data['house_street_number'] = house_geocode.get('street_number')
+                                    auction_data['house_street_name'] = house_geocode.get('street_name')
+                                    auction_data['house_suburb'] = house_geocode.get('suburb')
+                                    auction_data['house_area'] = house_geocode.get('area')
+                                    auction_data['house_city'] = house_geocode.get('city')
+                                    auction_data['house_province'] = house_geocode.get('province')
+                                    auction_data['house_coordinates'] = house_geocode.get('coordinates')
+                                except Exception as e:
+                                    print(f"House geocoding error: {e}")
+                                    auction_data['house_street_number'] = None
+                                    auction_data['house_street_name'] = None
+                                    auction_data['house_suburb'] = None
+                                    auction_data['house_area'] = None
+                                    auction_data['house_city'] = None
+                                    auction_data['house_province'] = None
+                                    auction_data['house_coordinates'] = None
                     
                         # Add auction_number for display (but remove before upload)
                         auction_data['auction_number'] = i
@@ -508,10 +508,10 @@ Auction text to extract from:
                         supabase_key = os.getenv('SUPABASE_KEY')
                     
                         headers = {
-                        'apikey': supabase_key,
-                        'Authorization': f'Bearer {supabase_key}',
-                        'Content-Type': 'application/json',
-                        'Prefer': 'return=minimal'
+                            'apikey': supabase_key,
+                            'Authorization': f'Bearer {supabase_key}',
+                            'Content-Type': 'application/json',
+                            'Prefer': 'return=minimal'
                         }
                     
                         # Remove auction_number if exists
