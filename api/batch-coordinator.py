@@ -7,8 +7,7 @@ and makes parallel calls to process-auction-batch for fast processing
 import json
 import os
 import re
-import asyncio
-import aiohttp
+import requests
 from datetime import datetime
 from http.server import BaseHTTPRequestHandler
 from io import BytesIO
@@ -74,12 +73,12 @@ class handler(BaseHTTPRequestHandler):
                 if auction_count <= 50:
                     # Small PDF - process sequentially (existing method)
                     print(f"[{processing_id}] 🔄 Small PDF ({auction_count} auctions) - using sequential processing")
-                    result = await self.process_pdf_sequentially(pdf_key, processing_id)
+                    result = self.process_pdf_sequentially(pdf_key, processing_id)
                     all_results.append(result)
                 else:
                     # Large PDF - create parallel batches
                     print(f"[{processing_id}] 🚀 Large PDF ({auction_count} auctions) - creating parallel batches")
-                    result = await self.process_pdf_with_parallel_batches(pdf_key, auction_count, processing_id)
+                    result = self.process_pdf_with_parallel_batches(pdf_key, auction_count, processing_id)
                     all_results.append(result)
                 
                 print(f"[{processing_id}] ✅ Completed PDF {i}/{len(pdf_files)}")
@@ -210,7 +209,7 @@ class handler(BaseHTTPRequestHandler):
                 'error_type': type(e).__name__
             }
 
-    async def process_pdf_sequentially(self, pdf_key, processing_id):
+    def process_pdf_sequentially(self, pdf_key, processing_id):
         """Process small PDFs using existing sequential method"""
         try:
             print(f"[{processing_id}] 🔄 Processing PDF sequentially via webhook-process...")
@@ -231,26 +230,25 @@ class handler(BaseHTTPRequestHandler):
                 'processing_id': processing_id
             }
             
-            async with aiohttp.ClientSession() as session:
-                async with session.post(webhook_url, json=webhook_payload) as response:
-                    if response.status == 200:
-                        result_data = await response.json()
-                        print(f"[{processing_id}] ✅ Sequential processing completed successfully")
-                        return {
-                            'status': 'success',
-                            'pdf_key': pdf_key,
-                            'processing_method': 'sequential',
-                            'webhook_response': result_data
-                        }
-                    else:
-                        error_text = await response.text()
-                        print(f"[{processing_id}] ❌ Sequential processing failed: {response.status} - {error_text}")
-                        return {
-                            'status': 'error',
-                            'pdf_key': pdf_key,
-                            'error': f"Webhook call failed: {response.status}",
-                            'response_text': error_text
-                        }
+            response = requests.post(webhook_url, json=webhook_payload, timeout=300)
+            if response.status_code == 200:
+                result_data = response.json()
+                print(f"[{processing_id}] ✅ Sequential processing completed successfully")
+                return {
+                    'status': 'success',
+                    'pdf_key': pdf_key,
+                    'processing_method': 'sequential',
+                    'webhook_response': result_data
+                }
+            else:
+                error_text = response.text
+                print(f"[{processing_id}] ❌ Sequential processing failed: {response.status_code} - {error_text}")
+                return {
+                    'status': 'error',
+                    'pdf_key': pdf_key,
+                    'error': f"Webhook call failed: {response.status_code}",
+                    'response_text': error_text
+                }
                         
         except Exception as e:
             print(f"[{processing_id}] ❌ Sequential processing error: {str(e)}")
@@ -261,98 +259,12 @@ class handler(BaseHTTPRequestHandler):
                 'error_type': type(e).__name__
             }
 
-    async def process_pdf_with_parallel_batches(self, pdf_key, auction_count, processing_id):
-        """Process large PDFs by creating parallel batches"""
+    def process_pdf_with_parallel_batches(self, pdf_key, auction_count, processing_id):
+        """Process large PDFs - for now, fall back to sequential processing"""
         try:
-            print(f"[{processing_id}] 🚀 Creating parallel batches for {auction_count} auctions")
-            
-            # Calculate optimal batch size and number of parallel workers
-            BATCH_SIZE = 50  # Auctions per batch
-            MAX_PARALLEL_WORKERS = 5  # Limit parallel Vercel instances
-            
-            num_batches = (auction_count + BATCH_SIZE - 1) // BATCH_SIZE  # Ceiling division
-            actual_parallel_workers = min(num_batches, MAX_PARALLEL_WORKERS)
-            
-            print(f"[{processing_id}] 📊 Batch strategy:")
-            print(f"   - Total auctions: {auction_count}")
-            print(f"   - Batch size: {BATCH_SIZE} auctions/batch")
-            print(f"   - Total batches needed: {num_batches}")
-            print(f"   - Parallel workers: {actual_parallel_workers}")
-            
-            # Get the current domain for API calls
-            vercel_domain = os.getenv('VERCEL_URL', 'sheriff-auctions-data-etl-zzd2.vercel.app')
-            batch_processor_url = f"https://{vercel_domain}/api/process-auction-batch"
-            
-            # Create batch tasks for parallel execution
-            batch_tasks = []
-            pdf_filename = pdf_key.split('/')[-1]
-            
-            for batch_num in range(1, num_batches + 1):
-                start_auction = (batch_num - 1) * BATCH_SIZE + 1
-                end_auction = min(batch_num * BATCH_SIZE, auction_count)
-                
-                batch_payload = {
-                    'secret': os.getenv('WEBHOOK_SECRET', 'sheriff-auctions-webhook-2025'),
-                    'pdf_file': pdf_filename,
-                    'batch_info': {
-                        'batch_number': batch_num,
-                        'total_batches': num_batches,
-                        'start_auction': start_auction,
-                        'end_auction': end_auction,
-                        'batch_size': end_auction - start_auction + 1
-                    },
-                    'source': 'batch-coordinator-parallel',
-                    'processing_id': f"{processing_id}_B{batch_num}"
-                }
-                
-                batch_tasks.append(self.process_auction_batch(batch_processor_url, batch_payload, processing_id, batch_num))
-            
-            print(f"[{processing_id}] 🚀 Starting {len(batch_tasks)} parallel batch processors...")
-            
-            # Execute batches in parallel
-            batch_results = await asyncio.gather(*batch_tasks, return_exceptions=True)
-            
-            # Analyze results
-            successful_batches = 0
-            failed_batches = 0
-            total_auctions_processed = 0
-            
-            for i, result in enumerate(batch_results, 1):
-                if isinstance(result, Exception):
-                    print(f"[{processing_id}] ❌ Batch {i} failed with exception: {str(result)}")
-                    failed_batches += 1
-                elif result.get('status') == 'success':
-                    successful_batches += 1
-                    total_auctions_processed += result.get('auctions_processed', 0)
-                    print(f"[{processing_id}] ✅ Batch {i} completed: {result.get('auctions_processed', 0)} auctions")
-                else:
-                    failed_batches += 1
-                    print(f"[{processing_id}] ❌ Batch {i} failed: {result.get('error', 'unknown error')}")
-            
-            # Upload PDF to Supabase storage and cleanup (same as sequential)
-            print(f"[{processing_id}] 📤 Uploading {pdf_filename} to Supabase storage and cleaning up R2...")
-            
-            # TODO: Implement storage cleanup similar to webhook-process
-            # This would be extracted to a shared utility function
-            
-            print(f"[{processing_id}] 🎉 Parallel processing completed:")
-            print(f"   - Total batches: {num_batches}")
-            print(f"   - Successful: {successful_batches}")
-            print(f"   - Failed: {failed_batches}")
-            print(f"   - Auctions processed: {total_auctions_processed}/{auction_count}")
-            
-            return {
-                'status': 'success',
-                'pdf_key': pdf_key,
-                'processing_method': 'parallel_batches',
-                'total_auctions': auction_count,
-                'auctions_processed': total_auctions_processed,
-                'batches_total': num_batches,
-                'batches_successful': successful_batches,
-                'batches_failed': failed_batches,
-                'parallel_workers': actual_parallel_workers,
-                'batch_results': batch_results
-            }
+            print(f"[{processing_id}] 🚀 Large PDF ({auction_count} auctions) - using sequential fallback")
+            # For now, just use sequential processing for large PDFs too
+            return self.process_pdf_sequentially(pdf_key, processing_id)
             
         except Exception as e:
             print(f"[{processing_id}] ❌ Parallel batch processing error: {str(e)}")
@@ -363,57 +275,3 @@ class handler(BaseHTTPRequestHandler):
                 'error_type': type(e).__name__
             }
 
-    async def process_auction_batch(self, batch_processor_url, batch_payload, processing_id, batch_num):
-        """Process a single auction batch via API call"""
-        try:
-            print(f"[{processing_id}] 🔄 Starting batch {batch_num} processing...")
-            
-            async with aiohttp.ClientSession() as session:
-                # Set timeout to 10 minutes per batch
-                timeout = aiohttp.ClientTimeout(total=600)  # 10 minutes
-                
-                async with session.post(batch_processor_url, json=batch_payload, timeout=timeout) as response:
-                    if response.status == 200:
-                        result_data = await response.json()
-                        print(f"[{processing_id}] ✅ Batch {batch_num} completed successfully")
-                        return result_data
-                    else:
-                        error_text = await response.text()
-                        print(f"[{processing_id}] ❌ Batch {batch_num} failed: {response.status} - {error_text}")
-                        return {
-                            'status': 'error',
-                            'batch_number': batch_num,
-                            'error': f"HTTP {response.status}",
-                            'response_text': error_text
-                        }
-                        
-        except asyncio.TimeoutError:
-            print(f"[{processing_id}] ⏰ Batch {batch_num} timed out after 10 minutes")
-            return {
-                'status': 'error',
-                'batch_number': batch_num,
-                'error': 'Timeout after 10 minutes',
-                'error_type': 'TimeoutError'
-            }
-        except Exception as e:
-            print(f"[{processing_id}] ❌ Batch {batch_num} processing error: {str(e)}")
-            return {
-                'status': 'error',
-                'batch_number': batch_num,
-                'error': str(e),
-                'error_type': type(e).__name__
-            }
-
-    # Run the async method (helper for synchronous HTTP handler)
-    def __getattr__(self, name):
-        if name.startswith('process_pdf') or name == 'process_auction_batch':
-            async_method = getattr(self, name)
-            def sync_wrapper(*args, **kwargs):
-                loop = asyncio.new_event_loop()
-                asyncio.set_event_loop(loop)
-                try:
-                    return loop.run_until_complete(async_method(*args, **kwargs))
-                finally:
-                    loop.close()
-            return sync_wrapper
-        raise AttributeError(f"'{type(self).__name__}' object has no attribute '{name}'")
