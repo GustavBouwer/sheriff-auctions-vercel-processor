@@ -8,6 +8,7 @@ import json
 import os
 import re
 import requests
+import concurrent.futures
 from datetime import datetime
 from http.server import BaseHTTPRequestHandler
 from io import BytesIO
@@ -214,9 +215,8 @@ class handler(BaseHTTPRequestHandler):
         try:
             print(f"[{processing_id}] 🔄 Processing PDF sequentially via webhook-process...")
             
-            # Get the current domain for the API call
-            vercel_domain = os.getenv('VERCEL_URL', 'sheriff-auctions-data-etl-zzd2.vercel.app')
-            webhook_url = f"https://{vercel_domain}/api/webhook-process"
+            # Use the main production domain, not deployment-specific URL
+            webhook_url = "https://sheriff-auctions-data-etl-zzd2.vercel.app/api/webhook-process"
             
             # Create webhook payload for single PDF
             pdf_filename = pdf_key.split('/')[-1]
@@ -260,11 +260,80 @@ class handler(BaseHTTPRequestHandler):
             }
 
     def process_pdf_with_parallel_batches(self, pdf_key, auction_count, processing_id):
-        """Process large PDFs - for now, fall back to sequential processing"""
+        """Process large PDFs by splitting into 25-auction batches and processing in parallel"""
         try:
-            print(f"[{processing_id}] 🚀 Large PDF ({auction_count} auctions) - using sequential fallback")
-            # For now, just use sequential processing for large PDFs too
-            return self.process_pdf_sequentially(pdf_key, processing_id)
+            print(f"[{processing_id}] 🚀 Large PDF ({auction_count} auctions) - creating parallel batches")
+            
+            # Calculate batches (25 auctions per batch)
+            BATCH_SIZE = 25
+            num_batches = (auction_count + BATCH_SIZE - 1) // BATCH_SIZE
+            
+            print(f"[{processing_id}] 📊 Batch strategy:")
+            print(f"   - Total auctions: {auction_count}")
+            print(f"   - Batch size: {BATCH_SIZE} auctions/batch")
+            print(f"   - Total batches needed: {num_batches}")
+            
+            # Use the main production domain
+            batch_endpoint = "https://sheriff-auctions-data-etl-zzd2.vercel.app/api/process-auction-batch"
+            
+            # Prepare batch requests
+            pdf_filename = pdf_key.split('/')[-1]
+            batch_requests = []
+            
+            for batch_num in range(1, num_batches + 1):
+                start_idx = (batch_num - 1) * BATCH_SIZE
+                end_idx = min(batch_num * BATCH_SIZE, auction_count)
+                
+                batch_requests.append({
+                    'batch_number': batch_num,
+                    'start_auction': start_idx + 1,
+                    'end_auction': end_idx,
+                    'pdf_file': pdf_filename,
+                    'processing_id': f"{processing_id}_B{batch_num}"
+                })
+            
+            print(f"[{processing_id}] 🚀 Launching {num_batches} parallel batch processors...")
+            
+            # Process batches in parallel
+            batch_results = []
+            with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
+                futures = []
+                for batch_req in batch_requests:
+                    future = executor.submit(self.process_single_batch, batch_endpoint, batch_req)
+                    futures.append((batch_req['batch_number'], future))
+                
+                # Collect results
+                for batch_num, future in futures:
+                    try:
+                        result = future.result(timeout=300)
+                        batch_results.append(result)
+                        if result.get('status') == 'success':
+                            print(f"[{processing_id}] ✅ Batch {batch_num}/{num_batches} completed")
+                        else:
+                            print(f"[{processing_id}] ❌ Batch {batch_num}/{num_batches} failed")
+                    except Exception as e:
+                        print(f"[{processing_id}] ❌ Batch {batch_num} error: {str(e)}")
+                        batch_results.append({
+                            'status': 'error',
+                            'batch_number': batch_num,
+                            'error': str(e)
+                        })
+            
+            # Aggregate results
+            successful_batches = len([r for r in batch_results if r.get('status') == 'success'])
+            total_processed = sum(r.get('auctions_processed', 0) for r in batch_results)
+            
+            print(f"[{processing_id}] 📊 PDF Complete: {successful_batches}/{num_batches} batches, {total_processed}/{auction_count} auctions")
+            
+            return {
+                'status': 'success' if successful_batches > 0 else 'error',
+                'pdf_key': pdf_key,
+                'auction_count': auction_count,
+                'auctions_processed': total_processed,
+                'batches_total': num_batches,
+                'batches_successful': successful_batches,
+                'batch_results': batch_results
+            }
             
         except Exception as e:
             print(f"[{processing_id}] ❌ Parallel batch processing error: {str(e)}")
@@ -273,5 +342,44 @@ class handler(BaseHTTPRequestHandler):
                 'pdf_key': pdf_key,
                 'error': str(e),
                 'error_type': type(e).__name__
+            }
+    
+    def process_single_batch(self, batch_endpoint, batch_request):
+        """Process a single batch of auctions"""
+        try:
+            payload = {
+                'secret': os.getenv('WEBHOOK_SECRET', 'sheriff-auctions-webhook-2025'),
+                'pdf_file': batch_request['pdf_file'],
+                'batch_info': {
+                    'batch_number': batch_request['batch_number'],
+                    'start_auction': batch_request['start_auction'],
+                    'end_auction': batch_request['end_auction']
+                },
+                'processing_id': batch_request['processing_id']
+            }
+            
+            response = requests.post(batch_endpoint, json=payload, timeout=300)
+            
+            if response.status_code == 200:
+                return response.json()
+            else:
+                return {
+                    'status': 'error',
+                    'batch_number': batch_request['batch_number'],
+                    'error': f"HTTP {response.status_code}",
+                    'response_text': response.text[:500]  # Limit error text
+                }
+                
+        except requests.Timeout:
+            return {
+                'status': 'error',
+                'batch_number': batch_request['batch_number'],
+                'error': 'Request timeout after 5 minutes'
+            }
+        except Exception as e:
+            return {
+                'status': 'error',
+                'batch_number': batch_request['batch_number'],
+                'error': str(e)
             }
 
