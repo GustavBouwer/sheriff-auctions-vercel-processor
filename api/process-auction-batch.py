@@ -244,13 +244,22 @@ class handler(BaseHTTPRequestHandler):
             skipped_count = 0
             
             for i, auction in enumerate(auctions):
-                # Extract case number from auction text
-                case_pattern = re.compile(r'Case No:\\s*([A-Z]*\\d+/\\d+)', re.IGNORECASE)
-                match = case_pattern.search(auction)
+                # Extract case number from auction text - handle multiple formats
+                case_patterns = [
+                    re.compile(r'Case No:\s*([A-Z]*\d+/\d+)', re.IGNORECASE),  # Standard: D5071/2024
+                    re.compile(r'Case No:\s*(\d+-\d+)', re.IGNORECASE),        # Dash format: 2023-123791
+                    re.compile(r'Case No:\s*(\d+/\d+)', re.IGNORECASE),        # Simple: 12345/2024
+                    re.compile(r'Case No:\s*([A-Z]+\d+/\d+)', re.IGNORECASE)   # Letter prefix
+                ]
                 
-                if match:
-                    case_number = match.group(1).strip()
-                    if case_number in existing_case_numbers:
+                case_number = None
+                for pattern in case_patterns:
+                    match = pattern.search(auction)
+                    if match:
+                        case_number = match.group(1).strip()
+                        break
+                
+                if case_number and case_number in existing_case_numbers:
                         print(f"[{processing_id}] ⏭️ Skipping duplicate: {case_number}")
                         skipped_count += 1
                         continue
@@ -310,7 +319,8 @@ class handler(BaseHTTPRequestHandler):
                 {"column_name": "additional_fees", "data_type": "text", "allow_null": True, "additional_info": "Explanation of any additional fees (e.g., 'attorney fees, sheriff fees, etc.')."},
                 {"column_name": "total_estimated_cost", "data_type": "bigint", "allow_null": True, "additional_info": "Calculate Total estimated cost, including all fees and reserve price."},
                 {"column_name": "currency", "data_type": "text", "allow_null": True, "additional_info": "Currency of all monetary values (e.g., 'ZAR')."},
-                {"column_name": "conditions_of_sale", "data_type": "text", "allow_null": True, "additional_info": "Return the conditions of sale for the auction. It is usually a few lines of information following text like 'THE CONDITIONS OF SALE:' or 'Material conditions of sale:'. Give the full details of the structure including the sheriff's fees and deposit amount required from the purchaser. If nothing is found return 'See Auction Desription'"}
+                {"column_name": "conditions_of_sale", "data_type": "text", "allow_null": True, "additional_info": "Return the conditions of sale for the auction. It is usually a few lines of information following text like 'THE CONDITIONS OF SALE:' or 'Material conditions of sale:'. Give the full details of the structure including the sheriff's fees and deposit amount required from the purchaser. If nothing is found return 'See Auction Desription'"},
+                {"column_name": "docex", "data_type": "text", "allow_null": True, "additional_info": "Extract the document exchange reference, usually in format 'Docex 220, Pretoria' or 'Docex 123, Cape Town'. Return just the Docex number and location if found, otherwise return null."}
             ]
             
             processed_auctions = []
@@ -452,12 +462,8 @@ Auction text to extract from:
                     
                 except Exception as e:
                     print(f"[{processing_id}] ❌ OpenAI processing error for auction {i+1}: {str(e)}")
-                    error_data = {
-                        "case_number": f"ERROR_{i+1}",
-                        "error": f"Processing failed: {str(e)}",
-                        "raw_text": auction[:500] + "..." if len(auction) > 500 else auction
-                    }
-                    processed_auctions.append(error_data)
+                    # Don't try to upload error auctions to database - skip them
+                    print(f"[{processing_id}] ⏭️ Skipping failed auction {i+1} - will not attempt upload")
             
             return processed_auctions
             
@@ -509,6 +515,9 @@ Auction text to extract from:
                         elif 'not-null constraint' in error_text.lower():
                             error_reason = "MISSING_REQUIRED_FIELD"
                             print(f"[{processing_id}] ❌ Upload failed: {auction_data.get('case_number')} -> MISSING REQUIRED FIELD")
+                        elif 'foreign key constraint' in error_text.lower() and 'province' in error_text.lower():
+                            error_reason = "INVALID_PROVINCE_REFERENCE"
+                            print(f"[{processing_id}] ❌ Upload failed: {auction_data.get('case_number')} -> INVALID PROVINCE (not in provinces table)")
                         elif response.status_code == 413:
                             error_reason = "PAYLOAD_TOO_LARGE"
                             print(f"[{processing_id}] ❌ Upload failed: {auction_data.get('case_number')} -> PAYLOAD TOO LARGE")

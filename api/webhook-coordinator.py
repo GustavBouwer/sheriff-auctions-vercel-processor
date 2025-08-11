@@ -400,9 +400,17 @@ class handler(BaseHTTPRequestHandler):
             
             cleaned_text = clean_text(raw_text)
             
-            # Extract case numbers
-            case_pattern = re.compile(r'Case No:\\s*([A-Z]*\\d+/\\d+)', re.IGNORECASE)
-            matches = case_pattern.findall(cleaned_text)
+            # Extract case numbers - handle multiple formats
+            case_patterns = [
+                re.compile(r'Case No:\s*([A-Z]*\d+/\d+)', re.IGNORECASE),  # Standard: D5071/2024, 120667/2023
+                re.compile(r'Case No:\s*(\d+-\d+)', re.IGNORECASE),        # Dash format: 2023-123791
+                re.compile(r'Case No:\s*(\d+/\d+)', re.IGNORECASE),        # Simple: 12345/2024
+                re.compile(r'Case No:\s*([A-Z]+\d+/\d+)', re.IGNORECASE)   # Letter prefix: D5071/2024
+            ]
+            
+            matches = []
+            for pattern in case_patterns:
+                matches.extend(pattern.findall(cleaned_text))
             
             if not matches:
                 print(f"[{processing_id}] ⚠️ No case numbers found in PDF")

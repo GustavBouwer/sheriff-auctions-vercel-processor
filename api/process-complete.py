@@ -196,7 +196,8 @@ class handler(BaseHTTPRequestHandler):
                 {"column_name": "additional_fees", "data_type": "text", "allow_null": True, "additional_info": "Explanation of any additional fees (e.g., 'attorney fees, sheriff fees, etc.')."},
                 {"column_name": "total_estimated_cost", "data_type": "bigint", "allow_null": True, "additional_info": "Calculate Total estimated cost, including all fees and reserve price."},
                 {"column_name": "currency", "data_type": "text", "allow_null": True, "additional_info": "Currency of all monetary values (e.g., 'ZAR')."},
-                {"column_name": "conditions_of_sale", "data_type": "text", "allow_null": True, "additional_info": "Return the conditions of sale for the auction. It is usually a few lines of information following text like 'THE CONDITIONS OF SALE:' or 'Material conditions of sale:'. Give the full details of the structure including the sheriff's fees and deposit amount required from the purchaser. If nothing is found return 'See Auction Desription'"}
+                {"column_name": "conditions_of_sale", "data_type": "text", "allow_null": True, "additional_info": "Return the conditions of sale for the auction. It is usually a few lines of information following text like 'THE CONDITIONS OF SALE:' or 'Material conditions of sale:'. Give the full details of the structure including the sheriff's fees and deposit amount required from the purchaser. If nothing is found return 'See Auction Desription'"},
+                {"column_name": "docex", "data_type": "text", "allow_null": True, "additional_info": "Extract the document exchange reference, usually in format 'Docex 220, Pretoria' or 'Docex 123, Cape Town'. Return just the Docex number and location if found, otherwise return null."}
             ]
             
             # Process each auction individually with your fine-tuned prompt
