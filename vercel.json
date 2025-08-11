@@ -3,6 +3,12 @@
     "api/webhook-process.py": {
       "maxDuration": 800
     },
+    "api/webhook-receive-v2.py": {
+      "maxDuration": 120
+    },
+    "api/process-auction-batch.py": {
+      "maxDuration": 180
+    },
     "api/process-complete.py": {
       "maxDuration": 800
     },
