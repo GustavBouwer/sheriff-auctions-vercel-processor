@@ -302,10 +302,10 @@ class handler(BaseHTTPRequestHandler):
                     future = executor.submit(self.process_single_batch, batch_endpoint, batch_req)
                     futures.append((batch_req['batch_number'], future))
                 
-                # Collect results
+                # Collect results with longer timeout
                 for batch_num, future in futures:
                     try:
-                        result = future.result(timeout=300)
+                        result = future.result(timeout=600)  # Increased to 10 minutes
                         batch_results.append(result)
                         if result.get('status') == 'success':
                             print(f"[{processing_id}] ✅ Batch {batch_num}/{num_batches} completed")
@@ -358,7 +358,7 @@ class handler(BaseHTTPRequestHandler):
                 'processing_id': batch_request['processing_id']
             }
             
-            response = requests.post(batch_endpoint, json=payload, timeout=300)
+            response = requests.post(batch_endpoint, json=payload, timeout=600)
             
             if response.status_code == 200:
                 return response.json()
@@ -374,7 +374,7 @@ class handler(BaseHTTPRequestHandler):
             return {
                 'status': 'error',
                 'batch_number': batch_request['batch_number'],
-                'error': 'Request timeout after 5 minutes'
+                'error': 'Request timeout after 10 minutes'
             }
         except Exception as e:
             return {

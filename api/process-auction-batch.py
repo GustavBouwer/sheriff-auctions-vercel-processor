@@ -311,7 +311,7 @@ Auction text to extract from:
                         temperature=0.1
                     )
                     
-                    # Parse response (EXACT same logic as process-complete.py)
+                    # Parse response with improved error handling
                     content = response.choices[0].message.content.strip()
                     
                     # Remove markdown code block if present
@@ -325,14 +325,38 @@ Auction text to extract from:
                     
                     content = content.strip()
                     
-                    if content.startswith('['):
-                        extracted_data = json.loads(content)
-                        if isinstance(extracted_data, list) and len(extracted_data) > 0:
-                            auction_data = extracted_data[0]
+                    # Try to extract valid JSON even if malformed
+                    try:
+                        if content.startswith('['):
+                            extracted_data = json.loads(content)
+                            if isinstance(extracted_data, list) and len(extracted_data) > 0:
+                                auction_data = extracted_data[0]
+                            else:
+                                raise ValueError("Empty array returned")
                         else:
-                            raise ValueError("Empty array returned")
-                    else:
-                        auction_data = json.loads(content)
+                            auction_data = json.loads(content)
+                    except json.JSONDecodeError as e:
+                        # Try to fix common JSON issues
+                        print(f"[{processing_id}] 🔧 Attempting JSON repair for auction {i+1}: {str(e)}")
+                        
+                        # Remove trailing commas and fix common issues
+                        fixed_content = content
+                        fixed_content = re.sub(r',(\s*[}\]])', r'\1', fixed_content)  # Remove trailing commas
+                        fixed_content = re.sub(r'(["\'])\s*:\s*(["\'])([^"\']*)\2', r'\1: "\3"', fixed_content)  # Fix unquoted values
+                        
+                        try:
+                            if fixed_content.startswith('['):
+                                extracted_data = json.loads(fixed_content)
+                                if isinstance(extracted_data, list) and len(extracted_data) > 0:
+                                    auction_data = extracted_data[0]
+                                else:
+                                    raise ValueError("Empty array returned after repair")
+                            else:
+                                auction_data = json.loads(fixed_content)
+                            print(f"[{processing_id}] ✅ JSON repair successful for auction {i+1}")
+                        except:
+                            # If all fails, create error data and continue
+                            raise ValueError(f"Could not parse JSON even after repair: {str(e)[:200]}")
                     
                     # Add metadata (EXACT same as process-complete.py)
                     auction_data['gov_pdf_name'] = f"unprocessed/{pdf_file}"

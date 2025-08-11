@@ -7,7 +7,10 @@
       "maxDuration": 120
     },
     "api/process-auction-batch.py": {
-      "maxDuration": 180
+      "maxDuration": 700
+    },
+    "api/batch-coordinator.py": {
+      "maxDuration": 700
     },
     "api/process-complete.py": {
       "maxDuration": 800
