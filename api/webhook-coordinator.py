@@ -260,18 +260,24 @@ class handler(BaseHTTPRequestHandler):
             }
 
     def process_pdf_with_parallel_batches(self, pdf_key, auction_count, processing_id):
-        """Process large PDFs by splitting into 25-auction batches and processing in parallel"""
+        """Process large PDFs by splitting into 50-auction batches and processing in parallel"""
         try:
             print(f"[{processing_id}] 🚀 Large PDF ({auction_count} auctions) - creating parallel batches")
             
-            # Calculate batches (25 auctions per batch)
-            BATCH_SIZE = 25
+            # Calculate batches (50 auctions per batch)
+            BATCH_SIZE = 50
             num_batches = (auction_count + BATCH_SIZE - 1) // BATCH_SIZE
             
             print(f"[{processing_id}] 📊 Batch strategy:")
             print(f"   - Total auctions: {auction_count}")
             print(f"   - Batch size: {BATCH_SIZE} auctions/batch")
             print(f"   - Total batches needed: {num_batches}")
+            
+            # NEW: Check for existing case numbers in Supabase before processing
+            existing_case_numbers = self.get_existing_case_numbers_from_pdf(pdf_key, processing_id)
+            if existing_case_numbers:
+                print(f"[{processing_id}] 🔍 Found {len(existing_case_numbers)} existing case numbers in database")
+                print(f"[{processing_id}] 📊 Duplicate prevention: Will skip already processed auctions")
             
             # Use the main production domain
             batch_endpoint = "https://sheriff-auctions-data-etl-zzd2.vercel.app/api/process-auction-batch"
@@ -289,7 +295,8 @@ class handler(BaseHTTPRequestHandler):
                     'start_auction': start_idx + 1,
                     'end_auction': end_idx,
                     'pdf_file': pdf_filename,
-                    'processing_id': f"{processing_id}_B{batch_num}"
+                    'processing_id': f"{processing_id}_B{batch_num}",
+                    'existing_case_numbers': list(existing_case_numbers) if existing_case_numbers else []
                 })
             
             print(f"[{processing_id}] 🚀 Launching {num_batches} parallel batch processors...")
@@ -343,6 +350,110 @@ class handler(BaseHTTPRequestHandler):
                 'error': str(e),
                 'error_type': type(e).__name__
             }
+
+    def get_existing_case_numbers_from_pdf(self, pdf_key, processing_id):
+        """Extract case numbers from PDF and check which ones already exist in Supabase"""
+        try:
+            print(f"[{processing_id}] 🔍 Checking for existing case numbers in database...")
+            
+            # First extract case numbers from PDF
+            r2_client = boto3.client(
+                's3',
+                endpoint_url=os.getenv('R2_ENDPOINT_URL'),
+                aws_access_key_id=os.getenv('R2_ACCESS_KEY_ID'),
+                aws_secret_access_key=os.getenv('R2_SECRET_ACCESS_KEY'),
+                region_name='auto'
+            )
+            
+            bucket_name = os.getenv('R2_BUCKET_NAME', 'sheriff-auction-pdfs')
+            pdf_obj = r2_client.get_object(Bucket=bucket_name, Key=pdf_key)
+            pdf_content = pdf_obj['Body'].read()
+            pdf_stream = BytesIO(pdf_content)
+            
+            # Extract text and find case numbers
+            raw_text = ""
+            with pdfplumber.open(pdf_stream) as pdf:
+                total_pages = len(pdf.pages)
+                start_page = 12 if total_pages > 12 else 0
+                
+                for i, page in enumerate(pdf.pages[start_page:], start=start_page + 1):
+                    page_text = page.extract_text()
+                    if page_text:
+                        if "PAUC" in page_text.upper():
+                            break
+                        raw_text += f"{page_text}\n"
+            
+            # Clean and extract case numbers using same pattern as analysis
+            def clean_text(text):
+                patterns_to_remove = [
+                    r"STAATSKOERANT[^\\n]*", r"GOVERNMENT GAZETTE[^\\n]*", r"No\\.\\s*\\d+\\s*",
+                    r"Page\\s*\\d+\\s*of\\s*\\d+", r"This gazette is also available free online at[^\\n]*",
+                    r"HIGH ALERT: SCAM WARNING!!![^\\n]*", r"CONTENTS / INHOUD[^\\n]*",
+                    r"LEGAL NOTICES[^\\n]*", r"WETLIKE KENNISGEWINGS[^\\n]*",
+                    r"SALES IN EXECUTION AND OTHER PUBLIC SALES[^\\n]*",
+                    r"GEREGTELIKE EN ANDER OPENBARE VERKOPE[^\\n]*",
+                    r"[^\\x20-\\x7E]"
+                ]
+                for pattern in patterns_to_remove:
+                    text = re.sub(pattern, '', text, flags=re.IGNORECASE)
+                return re.sub(r'\\s+', ' ', text).strip()
+            
+            cleaned_text = clean_text(raw_text)
+            
+            # Extract case numbers
+            case_pattern = re.compile(r'Case No:\\s*([A-Z]*\\d+/\\d+)', re.IGNORECASE)
+            matches = case_pattern.findall(cleaned_text)
+            
+            if not matches:
+                print(f"[{processing_id}] ⚠️ No case numbers found in PDF")
+                return set()
+            
+            pdf_case_numbers = set(matches)
+            print(f"[{processing_id}] 📋 Found {len(pdf_case_numbers)} case numbers in PDF")
+            
+            # Query Supabase to check which ones exist
+            supabase_url = os.getenv('SUPABASE_URL')
+            supabase_key = os.getenv('SUPABASE_KEY')
+            
+            if not supabase_url or not supabase_key:
+                print(f"[{processing_id}] ⚠️ Supabase credentials missing - skipping duplicate check")
+                return set()
+            
+            headers = {
+                'apikey': supabase_key,
+                'Authorization': f'Bearer {supabase_key}',
+                'Content-Type': 'application/json'
+            }
+            
+            # Query existing case numbers (use POST with filter to avoid URL length limits)
+            case_numbers_list = list(pdf_case_numbers)
+            existing_response = requests.get(
+                f"{supabase_url}/rest/v1/auctions",
+                headers=headers,
+                params={
+                    'select': 'case_number',
+                    'case_number': f"in.({','.join(case_numbers_list)})"
+                },
+                timeout=30
+            )
+            
+            if existing_response.status_code == 200:
+                existing_data = existing_response.json()
+                existing_case_numbers = set(item['case_number'] for item in existing_data)
+                
+                print(f"[{processing_id}] 📊 Duplicate check results:")
+                print(f"   - PDF case numbers: {len(pdf_case_numbers)}")
+                print(f"   - Already in database: {len(existing_case_numbers)}")
+                print(f"   - New to process: {len(pdf_case_numbers - existing_case_numbers)}")
+                
+                return existing_case_numbers
+            else:
+                print(f"[{processing_id}] ❌ Supabase query failed: {existing_response.status_code}")
+                return set()
+                
+        except Exception as e:
+            print(f"[{processing_id}] ❌ Error checking existing case numbers: {str(e)}")
+            return set()
     
     def process_single_batch(self, batch_endpoint, batch_request):
         """Process a single batch of auctions"""
@@ -355,19 +466,28 @@ class handler(BaseHTTPRequestHandler):
                     'start_auction': batch_request['start_auction'],
                     'end_auction': batch_request['end_auction']
                 },
-                'processing_id': batch_request['processing_id']
+                'processing_id': batch_request['processing_id'],
+                'existing_case_numbers': batch_request.get('existing_case_numbers', [])
             }
             
             response = requests.post(batch_endpoint, json=payload, timeout=600)
             
             if response.status_code == 200:
-                return response.json()
+                result = response.json()
+                # Enhanced logging for successful batches
+                auctions_processed = result.get('auctions_processed', 0)
+                auctions_uploaded = result.get('auctions_uploaded', 0)
+                print(f"[Batch {batch_request['batch_number']}] ✅ Success: {auctions_processed} processed, {auctions_uploaded} uploaded")
+                return result
             else:
+                error_details = f"HTTP {response.status_code}: {response.text[:500]}"
+                print(f"[Batch {batch_request['batch_number']}] ❌ Request failed: {error_details}")
                 return {
                     'status': 'error',
                     'batch_number': batch_request['batch_number'],
-                    'error': f"HTTP {response.status_code}",
-                    'response_text': response.text[:500]  # Limit error text
+                    'error': error_details,
+                    'response_headers': dict(response.headers),
+                    'request_url': batch_endpoint
                 }
                 
         except requests.Timeout:

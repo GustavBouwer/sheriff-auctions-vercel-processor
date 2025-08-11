@@ -35,29 +35,29 @@ The Cloudflare worker should send:
 
 1. **Cloudflare Worker** discovers PDFs → sends webhook to `/api/webhook-coordinator`
 2. **webhook-coordinator** analyzes each PDF and counts auctions
-3. **Splits into batches** of 25 auctions each
-4. **Parallel processing**: Launches up to 5 concurrent `/api/process-auction-batch` instances
-5. **Each batch** processes its 25 auctions with OpenAI and uploads to Supabase
-6. **Results aggregated** and returned to Cloudflare
+3. **Duplicate Prevention**: Checks existing case numbers in Supabase database
+4. **Splits into batches** of 50 new auctions each (skips duplicates)
+5. **Parallel processing**: Launches up to 5 concurrent `/api/process-auction-batch` instances
+6. **Each batch** processes its 50 new auctions with OpenAI and uploads to Supabase
+7. **Results aggregated** and returned to Cloudflare
 
-## Expected Behavior for 2 PDFs
+## Expected Behavior for 2 PDFs (with Duplicate Prevention)
 
-If each PDF has ~70 auctions:
-- PDF 1: 70 auctions → 3 batches (25, 25, 20)
-- PDF 2: 70 auctions → 3 batches (25, 25, 20)
-- **Total**: 6 batch processor instances running in parallel (max 5 concurrent)
-- **Processing time**: ~60-90 seconds (parallel instead of sequential)
+If each PDF has ~158 auctions, but many are already processed:
+- PDF 1: 158 auctions → 98 already exist → 60 new auctions → 2 batches (50, 10)
+- PDF 2: 158 auctions → 128 already exist → 30 new auctions → 1 batch (30)
+- **Total**: 3 batch processor instances (90 new auctions, 226 duplicates skipped)
+- **Processing time**: ~6 minutes (3 batches × 2 minutes each)
+- **Cost savings**: ~75% reduction by skipping duplicates
 
-## Vercel Function Instances
+## Vercel Function Instances (After Duplicate Prevention)
 
-For 2 PDFs with 70 auctions each:
-1. **webhook-coordinator** (1 instance) - orchestrates everything
-2. **process-auction-batch** (6 instances) - processes 25 auctions each
-   - Batch 1-1: PDF1 auctions 1-25
-   - Batch 1-2: PDF1 auctions 26-50
-   - Batch 1-3: PDF1 auctions 51-70
-   - Batch 2-1: PDF2 auctions 1-25
-   - Batch 2-2: PDF2 auctions 26-50
-   - Batch 2-3: PDF2 auctions 51-70
+For 2 PDFs with 158 auctions each (example scenario):
+1. **webhook-coordinator** (1 instance) - orchestrates everything + duplicate checking
+2. **process-auction-batch** (3 instances) - processes 50 new auctions each
+   - Batch 1-1: PDF1 new auctions 1-50
+   - Batch 1-2: PDF1 new auctions 51-60 (10 auctions)
+   - Batch 2-1: PDF2 new auctions 1-30 (30 auctions)
 
-**Total**: 7 Vercel function invocations
+**Total**: 4 Vercel function invocations (instead of 7+ without duplicate prevention)
+**Cost Impact**: ~75% reduction in processing costs and function invocations

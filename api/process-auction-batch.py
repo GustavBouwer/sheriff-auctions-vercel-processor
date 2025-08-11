@@ -97,10 +97,11 @@ class handler(BaseHTTPRequestHandler):
             pdf_file = batch_data.get('pdf_file')
             batch_info = batch_data.get('batch_info', {})
             processing_id = batch_data.get('processing_id', 'unknown')
+            existing_case_numbers = set(batch_data.get('existing_case_numbers', []))
             
             batch_number = batch_info.get('batch_number', 1)
             start_auction = batch_info.get('start_auction', 1)
-            end_auction = batch_info.get('end_auction', 25)
+            end_auction = batch_info.get('end_auction', 50)
             
             print(f"[{processing_id}] 🔄 Processing batch {batch_number}: auctions {start_auction}-{end_auction}")
             
@@ -114,8 +115,16 @@ class handler(BaseHTTPRequestHandler):
                 self.wfile.write(json.dumps({'error': 'No auctions found in batch range'}).encode())
                 return
             
-            # Process auctions with EXACT same logic as process-complete.py
-            processed_auctions = self.process_auctions_with_openai(auctions, pdf_file, processing_id)
+            # Filter out auctions with existing case numbers (duplicate prevention)
+            if existing_case_numbers:
+                filtered_auctions = self.filter_duplicate_auctions(auctions, existing_case_numbers, processing_id)
+                print(f"[{processing_id}] 📊 Duplicate filtering: {len(auctions)} → {len(filtered_auctions)} auctions (skipped {len(auctions) - len(filtered_auctions)} duplicates)")
+            else:
+                filtered_auctions = auctions
+                print(f"[{processing_id}] ⚠️ No duplicate filtering - processing all {len(auctions)} auctions")
+            
+            # Process remaining auctions with EXACT same logic as process-complete.py
+            processed_auctions = self.process_auctions_with_openai(filtered_auctions, pdf_file, processing_id)
             
             # Upload to Supabase
             upload_results = self.upload_to_supabase(processed_auctions, processing_id)
@@ -227,6 +236,34 @@ class handler(BaseHTTPRequestHandler):
         except Exception as e:
             print(f"[{processing_id}] ❌ PDF extraction error: {str(e)}")
             return []
+
+    def filter_duplicate_auctions(self, auctions, existing_case_numbers, processing_id):
+        """Filter out auctions that already exist in the database based on case numbers"""
+        try:
+            filtered_auctions = []
+            skipped_count = 0
+            
+            for i, auction in enumerate(auctions):
+                # Extract case number from auction text
+                case_pattern = re.compile(r'Case No:\\s*([A-Z]*\\d+/\\d+)', re.IGNORECASE)
+                match = case_pattern.search(auction)
+                
+                if match:
+                    case_number = match.group(1).strip()
+                    if case_number in existing_case_numbers:
+                        print(f"[{processing_id}] ⏭️ Skipping duplicate: {case_number}")
+                        skipped_count += 1
+                        continue
+                
+                # Include auction if no case number found or not in existing set
+                filtered_auctions.append(auction)
+            
+            print(f"[{processing_id}] 📊 Duplicate filter results: kept {len(filtered_auctions)}, skipped {skipped_count}")
+            return filtered_auctions
+            
+        except Exception as e:
+            print(f"[{processing_id}] ❌ Duplicate filtering error: {str(e)} - processing all auctions")
+            return auctions
 
     def process_auctions_with_openai(self, auctions, pdf_file, processing_id):
         """Process auctions with OpenAI using EXACT same logic as process-complete.py"""
@@ -458,12 +495,37 @@ Auction text to extract from:
                         upload_results.append({'status': 'success', 'case_number': auction_data.get('case_number')})
                         print(f"[{processing_id}] ✅ Uploaded: {auction_data.get('case_number')}")
                     else:
+                        # Enhanced error logging with specific failure reasons
+                        error_text = response.text
+                        error_details = f"HTTP {response.status_code}: {error_text}"
+                        
+                        # Parse common error types for better logging
+                        if 'duplicate key value violates unique constraint' in error_text.lower():
+                            error_reason = "DUPLICATE_CASE_NUMBER"
+                            print(f"[{processing_id}] ❌ Upload failed: {auction_data.get('case_number')} -> ALREADY EXISTS (duplicate case_number)")
+                        elif 'invalid input syntax' in error_text.lower():
+                            error_reason = "INVALID_DATA_FORMAT"
+                            print(f"[{processing_id}] ❌ Upload failed: {auction_data.get('case_number')} -> INVALID DATA FORMAT")
+                        elif 'not-null constraint' in error_text.lower():
+                            error_reason = "MISSING_REQUIRED_FIELD"
+                            print(f"[{processing_id}] ❌ Upload failed: {auction_data.get('case_number')} -> MISSING REQUIRED FIELD")
+                        elif response.status_code == 413:
+                            error_reason = "PAYLOAD_TOO_LARGE"
+                            print(f"[{processing_id}] ❌ Upload failed: {auction_data.get('case_number')} -> PAYLOAD TOO LARGE")
+                        elif response.status_code == 429:
+                            error_reason = "RATE_LIMITED"
+                            print(f"[{processing_id}] ❌ Upload failed: {auction_data.get('case_number')} -> RATE LIMITED")
+                        else:
+                            error_reason = f"HTTP_{response.status_code}"
+                            print(f"[{processing_id}] ❌ Upload failed: {auction_data.get('case_number')} -> {error_reason}: {error_text[:200]}")
+                        
                         upload_results.append({
                             'status': 'error',
                             'case_number': auction_data.get('case_number'),
-                            'error': f"HTTP {response.status_code}: {response.text}"
+                            'error': error_details,
+                            'error_type': error_reason,
+                            'http_status': response.status_code
                         })
-                        print(f"[{processing_id}] ❌ Upload failed: {auction_data.get('case_number')}")
                         
                 except Exception as e:
                     upload_results.append({
